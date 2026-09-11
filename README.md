@@ -88,6 +88,10 @@ The second archive puzzle is **A Light Between Pairs**, a three-stage glyph-base
 
 The third is **Across the Quantum Relay**, a measurement-free three-qubit circuit puzzle with draggable gates and controls, complex amplitude previews, universal state-transfer verification, and an AES-encrypted glyph transmission. Circuit conventions, the `jsqubits` simulator, AES format, persistence, and tests are documented in [docs/quantum-puzzle.md](docs/quantum-puzzle.md). Both interactive puzzles use live red/green glyph feedback.
 
+The fourth is **What the Phases Remember**: decode an eight-qubit statevector with an inverse QFT, enter the recovered word using glyphs, pack its indices into an integer, and use the largest prime factor to decipher an RSA transmission. Tools, bit ordering, and authoring values are documented in [docs/fourier-puzzle.md](docs/fourier-puzzle.md).
+
+The top-right **Secret Messages** collection is separate from puzzle solutions. Its local-only editor supports viewing, adding, editing, and deleting messages with glyph previews. Start it with `node .local-tools/server.mjs --port 4181`; publish only `public/secret-messages.enc.json`. The editor and encrypted backups are Git-ignored. See [docs/secret-messages.md](docs/secret-messages.md) for the workflow and the public-key obfuscation caveat.
+
 1. Add one TypeScript file under `src/puzzles/` that default-exports a `Puzzle`.
 2. Import it in `src/main.ts` and append it to `archivePuzzles` in prerequisite order. Replace the corresponding future placeholder in the path. `src/puzzles/active.ts` still identifies the first archive puzzle; changing it replaces that first puzzle rather than adding a stage.
 

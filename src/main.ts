@@ -33,6 +33,9 @@ import pairedSignal from './puzzles/paired-signal'
 import { initializePlayfairWorkspace } from './playfair-workspace'
 import quantumRelay from './puzzles/quantum-relay'
 import { initializeQuantumWorkspace } from './quantum-workspace'
+import fourierSignal from './puzzles/fourier-signal'
+import { initializeFourierWorkspace, fourierStorageKey } from './fourier-workspace'
+import { initializeSecretMessages } from './secret-messages'
 import type { PuzzleBlock } from './puzzles/types'
 import { answerMatches } from './puzzles/types'
 import { initializeScene } from './scene'
@@ -51,7 +54,7 @@ if (!appRoot) {
 
 const app = appRoot
 const entryGate = createEntryGate()
-const archivePuzzles = [archivePuzzle, pairedSignal, quantumRelay]
+const archivePuzzles = [archivePuzzle, pairedSignal, quantumRelay, fourierSignal]
 const completedThisVisit = new Set<string>()
 const isCompleted = (id: string): boolean => completedThisVisit.has(id) || getPuzzleRecord(id)?.solved === true
 const canOpenPuzzle = (id: string): boolean => {
@@ -247,14 +250,24 @@ const cipherTargets: Array<{ element: HTMLElement; text: string }> = []
 const glyphAtlas = loadGlyphAtlas(`${import.meta.env.BASE_URL}assets/characters.png`)
 let playfairWorkspace: ReturnType<typeof initializePlayfairWorkspace> | undefined
 let quantumWorkspace: ReturnType<typeof initializeQuantumWorkspace> | undefined
+let fourierWorkspace: ReturnType<typeof initializeFourierWorkspace> | undefined
 const glyphFeedback = initializeGlyphFeedback(
   answerInput,
   getRequiredElement<HTMLButtonElement>('.submit-button'),
   () => activePuzzle,
-  () => [...cipherTargets, ...(playfairWorkspace?.getFeedbackTargets() ?? []), ...(quantumWorkspace?.getFeedbackTargets() ?? [])],
+  () => [...cipherTargets, ...(playfairWorkspace?.getFeedbackTargets() ?? []), ...(quantumWorkspace?.getFeedbackTargets() ?? []), ...(fourierWorkspace?.getFeedbackTargets() ?? [])],
 )
 
 function renderBlock(block: PuzzleBlock): HTMLElement {
+  if (block.type === 'fourier') {
+    fourierWorkspace = initializeFourierWorkspace(glyphAtlas, ready => {
+      answerInput.disabled = !ready
+      getRequiredElement<HTMLButtonElement>('.submit-button').disabled = !ready
+      answerInput.placeholder = ready ? 'Enter the decoded transmission' : 'Recover the glyph word and decrypt RSA first'
+      glyphFeedback.refresh()
+    })
+    return fourierWorkspace.element
+  }
   if (block.type === 'quantum') {
     quantumWorkspace = initializeQuantumWorkspace(glyphAtlas, ready => {
       answerInput.disabled = !ready
@@ -439,6 +452,11 @@ function applyRecordState(): void {
 
 function submitAnswer(value: string): void {
   if (entryExperience.busy) return
+  if (activePuzzle.id === fourierSignal.id && !fourierWorkspace?.ready) {
+    answerFeedback.className = 'answer-feedback answer-feedback--error'
+    answerFeedback.textContent = 'Recover the six glyphs and decrypt the RSA transmission before submitting.'
+    return
+  }
   if (activePuzzle.id === quantumRelay.id && !quantumWorkspace?.ready) {
     answerFeedback.className = 'answer-feedback answer-feedback--error'
     answerFeedback.textContent = 'Verify the state transfer and decrypt the glyph transmission before submitting.'
@@ -503,6 +521,8 @@ answerForm.addEventListener('submit', (event) => {
 
 let hintIndex = 0
 function refreshPuzzle(): void {
+  fourierWorkspace?.destroy()
+  fourierWorkspace = undefined
   quantumWorkspace?.destroy()
   quantumWorkspace = undefined
   playfairWorkspace?.destroy()
@@ -574,6 +594,7 @@ app.querySelector('[data-clear-archive]')?.addEventListener('click', () => {
   clearPuzzleRecords()
   completedThisVisit.clear()
   activePuzzle = archivePuzzle
+  try { localStorage.removeItem(fourierStorageKey) } catch {}
   try { localStorage.removeItem('signal-archive.selected-puzzle.v1'); localStorage.removeItem('signal-archive.playfair-work.v1'); localStorage.removeItem('signal-archive.quantum-work.v1') } catch {}
   refreshPuzzle()
   consoleController.setPuzzle(activePuzzle)
@@ -601,8 +622,8 @@ initializeTypingSounds(app, musicController)
 initializePuzzlePath(app, () => [
   ...entryGate.path,
   ...archivePuzzles.map(puzzle => ({ id: puzzle.id, title: puzzle.title, completed: isCompleted(puzzle.id), configured: true, reviewable: true })),
-  ...Array.from({ length: 2 }, (_, index) => ({
-    id: `upcoming-${index + 4}`, title: `Puzzle ${String(index + 4).padStart(2, '0')}`,
+  ...Array.from({ length: 1 }, (_, index) => ({
+    id: `upcoming-${index + 5}`, title: `Puzzle ${String(index + 5).padStart(2, '0')}`,
     completed: false, configured: false,
   })),
 ], id => {
@@ -616,6 +637,7 @@ initializePuzzlePath(app, () => [
 })
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+initializeSecretMessages(app, glyphAtlas)
 if (!reducedMotion) {
   window.addEventListener('pointermove', (event) => {
     const horizontal = (event.clientX / window.innerWidth - 0.5) * 1.2

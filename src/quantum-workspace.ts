@@ -1,5 +1,6 @@
 import { Check, Copy, Eraser, KeyRound, LockKeyhole, RotateCcw, Undo2, Redo2, createElement } from 'lucide'
 import type { GlyphAtlas } from './glyphs'
+import { initializeAmplitudeGrid } from './amplitude-grid'
 import { circuitColumns, circuitError, emptyCircuit, isCircuit, simulateCircuit, verifyTeleportation, type Circuit, type CircuitCell } from './quantum'
 import { decryptQuantumMessage, encryptedMessage, messageIv, recoveredAesKey } from './quantum-message'
 import './quantum.css'
@@ -40,7 +41,7 @@ export function initializeQuantumWorkspace(atlas: Promise<GlyphAtlas>, onReady: 
       <p>H creates or removes equal superpositions. X swaps |0&gt; and |1&gt;. Z changes the sign of |1&gt;. A control dot in the same column applies X or Z on the other wire only in the control's |1&gt; branch. This is a coherent quantum operation, not a measurement.</p>
       <ol><li>Prepare an entangled resource between the two initially empty wires.</li><li>Couple the unknown state into that resource, using the sender's two wires to carry the correction information.</li><li>Use controlled corrections on the receiving wire. Preserve phase as well as bit values.</li><li>Uncompute the sending wires. H maps |+&gt; to |0&gt;; simply discarding those wires does not meet the target.</li></ol>
       <p>The usual teleportation protocol measures two classical bits. Here those bits remain quantum controls until they are disentangled. This circuit is a coherent state-transfer exercise, not communication without a physical connection or faster-than-light signaling.</p>
-      <p>Run left to right. A column can hold independent single-qubit gates, or one X/Z target paired with one control on another wire. Empty columns do nothing. Complex amplitudes are shown as real + imaginary i; probabilities are their squared magnitudes.</p>
+      <p>Run left to right. A column can hold independent single-qubit gates, or one X/Z target paired with one control on another wire. Empty columns do nothing. Probabilities are the squared magnitudes of complex amplitudes.</p>
       <p><a href="https://en.wikipedia.org/wiki/Quantum_teleportation" target="_blank" rel="noopener noreferrer">Teleportation reference</a> / <a href="https://davidbkemp.github.io/jsqubits/jsqubitsManual.html" target="_blank" rel="noopener noreferrer">Simulator reference</a></p>
     </details>
     <h3>01 / Build the circuit</h3>
@@ -51,7 +52,7 @@ export function initializeQuantumWorkspace(atlas: Promise<GlyphAtlas>, onReady: 
     <div class="quantum-preview-controls"><label>Input state<select data-preset><option value="custom">Custom state</option><option value="0">|0&gt;</option><option value="1">|1&gt;</option><option value="+">|+&gt;</option><option value="-">|-&gt;</option><option value="i">|+i&gt;</option></select></label><label>Theta / degrees<input type="number" min="0" max="180" step="1" value="73" data-theta></label><label>Phi / degrees<input type="number" min="0" max="360" step="1" value="51" data-phi></label></div>
     <p class="quantum-state-formula">a = cos(theta/2), b = exp(i phi) sin(theta/2)</p>
     <label class="quantum-step">Circuit preview <output data-step-label>After column 12</output><input type="range" min="0" max="12" value="12" step="1" aria-label="Preview through column" data-step></label>
-    <div class="quantum-amplitudes"><table><caption>State vector / |q1 q2 q3&gt;</caption><thead><tr><th scope="col">Basis</th><th scope="col">Amplitude</th><th scope="col">Probability</th></tr></thead><tbody data-amplitudes></tbody></table></div>
+    <div class="quantum-amplitudes" data-amplitudes></div>
     <p class="quantum-status" data-fidelity></p>
     <button type="button" class="icon-text-button" data-verify>Verify all input states</button><p class="quantum-status" role="status" data-verify-status></p>
     <section class="quantum-aes"><h3>02 / Recover the transmission</h3>
@@ -70,6 +71,7 @@ export function initializeQuantumWorkspace(atlas: Promise<GlyphAtlas>, onReady: 
   const aesStatus = find('[data-aes-status]')
   const keyInput = find<HTMLInputElement>('[data-key-input]')
   const message = find('[data-message]')
+  const amplitudeGrid = initializeAmplitudeGrid(find('[data-amplitudes]'))
   find<HTMLTextAreaElement>('[data-ciphertext]').value = encryptedMessage
   find<HTMLInputElement>('[data-iv]').value = messageIv
   const clone = (value: Circuit): Circuit => value.map(column => [...column])
@@ -173,25 +175,17 @@ export function initializeQuantumWorkspace(atlas: Promise<GlyphAtlas>, onReady: 
   }
   function renderAmplitudes() {
     find('[data-step-label]').textContent = through === 0 ? 'Input' : `After column ${through}`
-    const body = find('[data-amplitudes]')
-    body.replaceChildren()
     const error = circuitError(circuit)
-    if (error) { find('[data-fidelity]').textContent = error; return }
+    if (error) { amplitudeGrid.clear(); find('[data-fidelity]').textContent = error; return }
     const state = simulateCircuit(circuit, theta, phi, through)
+    amplitudeGrid.update(state)
     const input = simulateCircuit(emptyCircuit(), theta, phi, 0)
-    const signed = (value: number) => (Math.abs(value) < .00005 ? 0 : value).toFixed(4)
     let overlapReal = 0
     let overlapImaginary = 0
     for (const [outputIndex, inputIndex] of [[0, 0], [1, 4]]) {
       const actual = state[outputIndex!]!, expected = input[inputIndex!]!
       overlapReal += expected.real * actual.real + expected.imaginary * actual.imaginary
       overlapImaginary += expected.real * actual.imaginary - expected.imaginary * actual.real
-    }
-    for (const amplitude of state) {
-      const row = document.createElement('tr')
-      row.dataset.basis = amplitude.basis
-      row.innerHTML = `<th scope="row">|${amplitude.basis}&gt;</th><td>${signed(amplitude.real)} ${amplitude.imaginary < -.00005 ? '-' : '+'} ${signed(Math.abs(amplitude.imaginary))}i</td><td><span class="quantum-probability"><span style="width:${Math.min(100, amplitude.probability * 100)}%"></span></span><span>${(amplitude.probability * 100).toFixed(2)}%</span></td>`
-      body.append(row)
     }
     find('[data-fidelity]').textContent = `Preview fidelity with |00x>: ${(Math.min(1, overlapReal ** 2 + overlapImaginary ** 2) * 100).toFixed(2)}%. Verify all input states to prove the transfer.`
   }
@@ -319,6 +313,6 @@ export function initializeQuantumWorkspace(atlas: Promise<GlyphAtlas>, onReady: 
     element,
     get ready() { return !!plaintext },
     getFeedbackTargets: () => plaintext ? [{ element: message, text: '', letters: [...plaintext.toUpperCase().replace(/[^A-Z0-9?!]/g, '')] }] : [],
-    destroy: () => { disposed = true; generation++; preview?.remove(); element.remove() },
+    destroy: () => { disposed = true; generation++; preview?.remove(); amplitudeGrid.destroy(); element.remove() },
   }
 }

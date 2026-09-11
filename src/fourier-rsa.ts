@@ -1,0 +1,41 @@
+import { modInv, modPow } from 'bigint-crypto-utils'
+
+export const rsaModulus = 212400842320789n
+export const rsaExponent = 65537n
+export const rsaCiphertext = '23401280926778,65155368349635,101129793421797,197787116843797,208791603009502,54462620852232,147646929515767,54462620852232,165557781550754,197787116843797,125768590382632,54462620852232,170244711159060,44317378693570,54462620852232,197787116843797,31384426325374,65155368349635,197787116843797,126421779638963,193038014905131,207119207102165,165557781550754,54462620852232,44317378693570,44317378693570,197787116843797,193038014905131,54462620852232,197787116843797,165557781550754,65155368349635,59312278897089,54462620852232,165557781550754,31384426325374,200192455817798,197787116843797,23401280926778,65155368349635,101129793421797,197787116843797,193038014905131,54462620852232,81178882188551,31384426325374,197787116843797,193038014905131,23401280926778,197787116843797,100371197207213,54462620852232,170244711159060,165557781550754,31384426325374,197787116843797,170244711159060,208791603009502,119746248125457,197787116843797,126421779638963,197787116843797,100371197207213,170244711159060,147646929515767,54462620852232,197787116843797,111842458465461,208791603009502,65155368349635,122969230447085,208791603009502,197787116843797,344943382608,65155368349635,165557781550754,197787116843797,170244711159060,197787116843797,122969230447085,100371197207213,126421779638963,81178882188551,54462620852232,197787116843797,31384426325374,100371197207213,170244711159060,31384426325374,197787116843797,126421779638963,197787116843797,100371197207213,170244711159060,119746248125457,197787116843797,31384426325374,65155368349635,197787116843797,59312278897089,54462620852232,197787116843797,23401280926778,65155368349635,101129793421797,165557781550754,44317378693570'.split(',')
+
+export function parseInteger(text: string): bigint {
+  if (!/^\d{1,16}$/.test(text.trim())) throw new Error('Enter a nonnegative decimal integer, at most 16 digits.')
+  return BigInt(text.trim())
+}
+
+export function factorPackedInteger(value: bigint): bigint[] {
+  if (value < 2n || value >= 1n << 36n) throw new Error('Factor tool range: 2 through 68719476735 (36 bits).')
+  const factors: bigint[] = []
+  let remaining = value
+  for (let divisor = 2n; divisor * divisor <= remaining; divisor += divisor === 2n ? 1n : 2n) {
+    while (remaining % divisor === 0n) { factors.push(divisor); remaining /= divisor }
+  }
+  if (remaining > 1n) factors.push(remaining)
+  return factors
+}
+
+export function deriveRsaKey(prime: bigint) {
+  if (prime !== 3240930197n) throw new Error('That is not the largest prime factor of the recovered glyph integer.')
+  const otherPrime = rsaModulus / prime
+  const totient = (prime - 1n) * (otherPrime - 1n)
+  return { otherPrime, totient, privateExponent: modInv(rsaExponent, totient) }
+}
+
+export function decryptRsa(privateExponent: bigint, ciphertext: readonly string[] = rsaCiphertext): string {
+  if (privateExponent !== deriveRsaKey(3240930197n).privateExponent) throw new Error('The private exponent does not satisfy the recovered RSA key.')
+  if (!ciphertext.length || ciphertext.length > 500) throw new Error('Invalid ciphertext block count.')
+  const bytes = ciphertext.map(block => {
+    const value = parseInteger(block)
+    if (value >= rsaModulus) throw new Error('RSA block must be smaller than n.')
+    const byte = modPow(value, privateExponent, rsaModulus)
+    if (byte > 255n) throw new Error('Decryption did not produce a byte.')
+    return Number(byte)
+  })
+  return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes))
+}

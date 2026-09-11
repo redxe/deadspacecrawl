@@ -1,0 +1,38 @@
+.app-shell:has(.fourier-workspace) { grid-template-columns: minmax(0, 1fr); }
+.workspace:has(.fourier-workspace) { perspective: none; }
+.puzzle-panel:has(.fourier-workspace) { transform: none !important; transform-style: flat; }
+.fourier-workspace { min-width: 0; text-align: left; }
+.fourier-workspace h3 { font-size: 21px; color: #e8cf95; margin: 24px 0 12px; }
+.fourier-workspace p { font-size: 15px; line-height: 1.6; color: #b2cac3; }
+.fourier-workspace details { border-block: 1px solid #42665e; padding: 12px 0; }
+.fourier-workspace summary { color: #deca92; cursor: pointer; }
+.fourier-workspace a { color: #93ddcb; }
+.fourier-workspace label { display: grid; gap: 7px; margin-block: 10px; font-size: 13px; min-width: 0; color: #bccebf; }
+.fourier-workspace input:not([type="checkbox"]), .fourier-workspace select, .fourier-workspace textarea { min-width: 0; width: 100%; padding: 9px; border: 1px solid #547969; border-radius: 3px; background: #091c19; color: #d6ecdf; font: 13px 'Share Tech Mono', monospace; }
+.fourier-workspace textarea { resize: vertical; }
+.fourier-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-block: 12px; }
+.fourier-slots { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 18px 0; }
+.fourier-slot { display: grid; grid-template-rows: 16px 42px; place-items: center; height: 72px; min-width: 0; padding: 4px; border: 1px solid #5c7c69; border-radius: 3px; background: #11291f; color: #bfcfad; cursor: pointer; }
+.fourier-slot[aria-pressed="true"] { outline: 2px solid #e6c27c; outline-offset: 2px; }
+.fourier-slot span { font-size: 11px; }
+.fourier-slot .glyph { width: 100%; height: 42px; object-fit: contain; }
+.fourier-keypad { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 7px; }
+.fourier-key { display: grid; grid-template-rows: 35px 15px; place-items: center; min-width: 0; padding: 4px; border: 1px solid #456e62; border-radius: 3px; background: #102723; color: #c2d5c4; cursor: pointer; }
+.fourier-key img { width: 100%; height: 35px; object-fit: contain; }
+.fourier-key span { font-size: 10px; white-space: nowrap; }
+.fourier-key:focus-visible, .fourier-slot:focus-visible { outline: 2px solid #e6c27c; }
+.fourier-workspace fieldset { min-width: 0; padding: 14px; border: 1px solid #436c5b; margin: 12px 0; }
+.fourier-workspace fieldset:disabled { opacity: .45; }
+.fourier-workspace legend { color: #d6c48d; font-size: 13px; padding: 0 6px; }
+.fourier-packed { display: block; white-space: pre-wrap; overflow-wrap: anywhere; color: #c6e4ac; font: 13px/1.8 'Share Tech Mono', monospace; margin: 12px 0; }
+.fourier-status { min-height: 24px; overflow-wrap: anywhere; }
+.fourier-key-values { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+.fourier-message .glyph { width: 27px; height: 35px; object-fit: contain; flex-shrink: 0; }
+.fourier-message .glyph-line { justify-content: flex-start; flex-wrap: wrap; gap: 3px; }
+@media (max-width: 640px) {
+  .fourier-keypad { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .fourier-slots { gap: 5px; }
+  .fourier-key-values { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .fourier-workspace fieldset { padding: 10px; }
+  .fourier-message .glyph { width: 23px; height: 29px; }
+}

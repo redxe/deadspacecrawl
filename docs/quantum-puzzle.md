@@ -8,7 +8,11 @@ The top wire is qubit 1 and the leftmost ket bit. The bottom wire is qubit 3 and
 
 Twelve columns run left to right. Each column supports independent H/X/Z gates on separate wires, or exactly one control paired with one X/Z target. Empty columns do nothing. Gates and controls support mouse/touch dragging, tap placement, keyboard selection, moving, erasing, undo, and redo. The field manual explains the operations and coherent corrections without supplying a complete circuit.
 
-The input is `cos(theta/2)|0> + exp(i phi) sin(theta/2)|1>`, with angles entered in degrees. Presets and a column scrubber expose all eight complex amplitudes and probabilities. Preview fidelity is for the selected state only, not a proof of universal transfer.
+The input is `cos(theta/2)|0> + exp(i phi) sin(theta/2)|1>`, with angles entered in degrees. Presets and a column scrubber update a phase-circle grid of all eight amplitudes. Preview fidelity is for the selected state only, not a proof of universal transfer.
+
+The grid has two rows and four columns: Y is the first bit (`q1`), X is the last two (`q2 q3`), and concatenating row and column labels gives the basis state. Filled radius is proportional to amplitude magnitude on one common scale, shown above the grid; filled area is proportional to probability. The largest magnitude fills its reference circle. A radial line points right for phase zero and rotates counterclockwise for positive phase (`+i` points up). Numerically zero amplitudes remain empty at their fixed positions, with undefined phase. Invalid circuit edits clear the display rather than retaining stale results.
+
+Hover, focus, or tap reveals the full basis, decimal index, complex amplitude, magnitude, probability, and phase, highlighting only that state. Arrow keys navigate; Home/End select row endpoints, Ctrl+Home/End select grid endpoints, and Escape dismisses details. The grid is a single Tab stop. Tooltips stay within the viewport, scrolling is contained on phones, and reduced-motion preferences disable hover expansion. The same display is used by the Fourier puzzle, with a four-bit split on each axis.
 
 Verification checks both basis inputs, including reset sending wires and matching target amplitudes up to one common global phase. By linearity, that verifies every superposition. Independent phases on the two basis outputs are rejected. Equivalent correct circuits are accepted, including parallel final cleanup Hadamards. This is coherent state transfer with interacting wires, not faster-than-light communication.
 
@@ -24,7 +28,7 @@ This is a static client-side puzzle, not confidential storage. The key, cipherte
 
 ## Checks
 
-`node --test tests/quantum.test.mjs tests/letter-feedback.test.mjs tests/glyph-feedback.test.mjs tests/playfair.test.mjs tests/puzzle-path.test.mjs`
+`node --test tests/amplitude-grid.test.mjs tests/quantum.test.mjs tests/letter-feedback.test.mjs tests/glyph-feedback.test.mjs tests/playfair.test.mjs tests/puzzle-path.test.mjs`
 
 `npm run build`
 

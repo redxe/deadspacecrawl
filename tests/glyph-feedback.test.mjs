@@ -15,6 +15,16 @@ const context = { exports: {}, require: path => path === './glyphs' ? glyphs.exp
 runInNewContext(compile('../src/glyph-feedback.ts'), context)
 const feedback = (texts, answer) => JSON.parse(JSON.stringify(context.exports.getGlyphFeedback(texts, answer)))
 
+test('dynamic workbench transmissions use rendered glyph text rather than empty static blocks', () => {
+  const puzzle = { blocks: [{ type: 'fourier' }], answer: { accepted: ['THE LETTER'] } }
+  const complete = context.exports.getTransmissionFeedback(puzzle, 'THE LETTER', ['THE LETTER'])
+  assert.equal(complete.ready, true)
+  assert.ok(complete.blocks.flat().every(glyph => glyph.state === 'correct'))
+  const wrong = context.exports.getTransmissionFeedback(puzzle, 'THE ZETTER', ['THE LETTER'])
+  assert.equal(wrong.ready, false)
+  assert.ok(wrong.blocks.flat().some(glyph => glyph.state === 'incorrect'))
+})
+
 test('glyph feedback follows decoded letters across combined and doubled glyphs', () => {
   const result = feedback(['THIS DOOR\nIS A MESS'], 'THIZ DOXR')[0]
   assert.deepEqual(result.slice(0, 7).map(glyph => glyph.state), ['correct', 'correct', 'incorrect', 'correct', 'correct', 'incorrect', 'correct'])

@@ -32,13 +32,6 @@
 .quantum-workspace textarea { resize: vertical; overflow-wrap: anywhere; }
 .quantum-step { margin: 18px 0; }
 .quantum-step input { width: 100%; accent-color: #b8d699; }
-.quantum-amplitudes { overflow-x: auto; }
-.quantum-amplitudes table { width: 100%; table-layout: fixed; border-collapse: collapse; color: #c8dfd1; font: 13px 'Share Tech Mono', monospace; }
-.quantum-amplitudes caption { text-align: left; color: #e0c389; margin-bottom: 12px; }
-.quantum-amplitudes th, .quantum-amplitudes td { padding: 7px 4px; border-bottom: 1px solid #264539; text-align: left; overflow-wrap: anywhere; }
-.quantum-amplitudes th:first-child { width: 20%; }
-.quantum-probability { display: inline-block; width: 42%; height: 7px; background: #263c2d; margin-right: 8px; vertical-align: middle; }
-.quantum-probability > span { display: block; height: 100%; background: #bfd48b; }
 .quantum-status { min-height: 24px; color: #ddc180 !important; }
 .quantum-status[data-verified="true"] { color: #9eebac !important; }
 .quantum-aes { margin-top: 28px; border-top: 1px solid #42675b; }
@@ -60,8 +53,6 @@
 @media (max-width: 480px) {
   .quantum-preview-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .quantum-preview-controls label:first-child { grid-column: 1 / -1; }
-  .quantum-amplitudes table { font-size: 11px; }
-  .quantum-amplitudes td:last-child .quantum-probability { display: none; }
   .quantum-glyphs { gap: 10px; }
   .quantum-glyphs .glyph { width: 23px; height: 31px; }
 }

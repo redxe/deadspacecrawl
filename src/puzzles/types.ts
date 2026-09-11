@@ -1,6 +1,7 @@
 export type PuzzleKind = 'cipher' | 'logic' | 'math'
 
 export type PuzzleBlock =
+  | { type: 'fourier' }
   | { type: 'quantum' }
   | { type: 'playfair' }
   | { type: 'text'; text: string }

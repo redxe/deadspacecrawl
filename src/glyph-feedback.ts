@@ -48,8 +48,8 @@ export function getGlyphFeedback(texts: readonly string[], answer: string): Glyp
   return blocks
 }
 
-export function getTransmissionFeedback(puzzle: Puzzle, answer: string) {
-  const texts = puzzle.answer.mode === 'number' ? [] : puzzle.blocks.flatMap(block => block.type === 'cipher' ? [block.text] : [])
+export function getTransmissionFeedback(puzzle: Puzzle, answer: string, renderedTexts?: readonly string[]) {
+  const texts = puzzle.answer.mode === 'number' ? [] : renderedTexts ?? puzzle.blocks.flatMap(block => block.type === 'cipher' ? [block.text] : [])
   const blocks = getGlyphFeedback(texts, answer)
   const ready = blocks.some(block => block.length > 0)
     && blocks.every(block => block.every(glyph => glyph.state === 'correct'))
@@ -72,7 +72,8 @@ export function initializeGlyphFeedback(
     const blocks = targets.map(target => target.letters ? getLetterFeedback(target.letters, input.value) : getGlyphFeedback([target.text], input.value)[0]!)
     const result = targets.some(target => target.letters)
       ? { blocks, ready: !input.disabled && blocks.some(block => block.length > 0) && blocks.every(block => block.every(glyph => glyph.state !== 'incorrect')) && answerMatches(getPuzzle(), input.value) }
-      : getTransmissionFeedback(getPuzzle(), input.value)
+      : getTransmissionFeedback(getPuzzle(), input.value, targets.map(target => target.text))
+    if (input.disabled) result.ready = false
     transmit.classList.toggle('submit-button--ready', result.ready)
     transmit.setAttribute('aria-label', result.ready ? 'Transmit matching text' : 'Transmit')
     transmit.title = result.ready ? 'Transmit matching text' : 'Transmit'
