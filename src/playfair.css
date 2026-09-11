@@ -1,0 +1,58 @@
+.playfair-workspace { width: 100%; min-width: 0; text-align: left; }
+.playfair-workspace p, .playfair-workspace li { color: #aac4bf; font-size: 15px; line-height: 1.55; }
+.playfair-workspace summary { cursor: pointer; color: #dec891; padding: 10px 0; }
+.playfair-workspace a { color: #a5e9dc; }
+.playfair-reference { border-block: 1px solid #35514b; padding: 8px 0; }
+.playfair-reference details { margin-top: 8px; }
+.playfair-stage { min-width: 0; margin: 24px 0 0; padding: 20px 0 0; border: 0; border-top: 1px solid #35514b; }
+.playfair-stage h3, .playfair-stage legend { color: #c8eee3; font-size: 21px; margin: 0 0 12px; padding: 0; }
+.playfair-stage:disabled { opacity: .48; }
+.playfair-log { margin: 14px 0; padding: 8px 16px; border-left: 2px solid #c9a76c; color: #d4dfcb; font-size: 16px; line-height: 1.65; }
+.playfair-square { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: min(100%, 330px); gap: 6px; margin: 16px auto; }
+.playfair-tile { display: grid; place-items: center; width: 100%; aspect-ratio: 1; min-width: 0; padding: 4px; border: 1px solid #52786e; border-radius: 3px; background: #0c2220; color: #b8e5d7; cursor: pointer; touch-action: none; }
+.playfair-tile[draggable="true"] { cursor: grab; }
+.playfair-tile[draggable="true"]:active { cursor: grabbing; }
+.playfair-drag-preview { position: fixed; z-index: 10000; width: 48px; height: 48px; padding: 4px; transform: translate(-50%, -50%); pointer-events: none; background: #10332ee6; border: 1px solid #f1cd81; box-shadow: 0 0 15px #7ff1e055; }
+.playfair-drag-preview img { width: 100%; height: 100%; object-fit: contain; }
+.playfair-tile img, .playfair-pair-source img, .playfair-chart img, .playfair-recovered img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.playfair-tile--selected { outline: 2px solid #f1cd81; outline-offset: 1px; background: #3a3523; }
+.playfair-tile--source { box-shadow: inset 0 0 0 2px #cbb779; }
+.playfair-tile:focus-visible, .playfair-pair-source:focus-visible { outline: 2px solid #9bffdc; outline-offset: 2px; }
+.playfair-actions { display: flex; align-items: center; gap: 16px; }
+.playfair-workspace .icon-text-button { gap: 8px; width: auto; }
+.playfair-workspace .icon-text-button svg { flex: 0 0 16px; }
+.playfair-status { min-height: 24px; color: #e0c58d !important; }
+.playfair-tray { display: grid; grid-template-columns: repeat(auto-fit, minmax(36px, 1fr)); gap: 5px; margin: 16px 0; }
+.playfair-pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 14px; margin: 18px 0; }
+.playfair-pair { min-width: 0; }
+.playfair-pair-source { display: grid; grid-template-columns: 20px 1fr 1fr; align-items: center; width: 100%; min-height: 40px; padding: 2px; border: 0; background: transparent; color: #c8ac7f; cursor: pointer; }
+.playfair-pair-source > span:not(:first-child) { display: block; height: 36px; }
+.playfair-pair-slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.playfair-pair-slots .playfair-tile { aspect-ratio: 1.15; }
+.playfair-chart { display: grid; grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); gap: 10px; padding: 12px 0; }
+.playfair-chart > div { display: grid; justify-items: center; color: #d4dfcb; }
+.playfair-chart > div > span:first-child { width: 40px; height: 40px; }
+.playfair-example { line-height: 1.6; color: #cfe4dd; }
+.playfair-recovered { display: flex; flex-wrap: wrap; gap: 4px; }
+.playfair-recovered > span { width: 30px; height: 36px; }
+.playfair-key-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 330px); gap: 24px; }
+.playfair-decoding-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 24px; align-items: start; }
+.playfair-tools { position: sticky; top: 12px; padding: 8px; background: #0b1919; border: 1px solid #35514b; border-radius: 3px; }
+.playfair-reference-square { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
+.playfair-reference-square > span { display: block; aspect-ratio: 1; min-width: 0; border: 1px solid #35514b; }
+.playfair-reference-square img { width: 100%; height: 100%; object-fit: contain; }
+.playfair-tools .playfair-tray { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 0; }
+.playfair-square-reference summary { cursor: pointer; padding: 4px 0 10px; color: #dec891; font-size: 14px; }
+.playfair-decoding-layout .playfair-pairs { margin-top: 0; }
+@media (max-width: 800px) {
+	.playfair-key-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+	.playfair-decoding-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+	.playfair-tools { z-index: 3; top: 0; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: start; }
+	.playfair-tools .playfair-tray { grid-template-columns: repeat(auto-fit, minmax(32px, 1fr)); margin-top: 0; }
+}
+@media (max-width: 420px) {
+	.playfair-tools { display: block; }
+	.playfair-reference-square { width: 140px; margin: 0 auto 10px; }
+	.playfair-tools .playfair-tray { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
+.puzzle-panel:has(.playfair-workspace) { transform: none !important; }

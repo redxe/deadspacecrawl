@@ -1,0 +1,67 @@
+.app-shell:has(.quantum-workspace) { grid-template-columns: minmax(0, 1fr); }
+.quantum-workspace { min-width: 0; text-align: left; }
+.quantum-workspace p, .quantum-workspace li { color: #a9c5bc; font-size: 15px; line-height: 1.55; }
+.quantum-workspace h3 { margin: 24px 0 12px; color: #d0eee2; font-size: 21px; }
+.quantum-goal { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-block: 1px solid #42675b; color: #abc0af; font: 12px 'Share Tech Mono', monospace; }
+.quantum-goal strong { display: block; color: #c7f6dc; font-size: 24px; margin-top: 4px; }
+.quantum-manual { border-bottom: 1px solid #42675b; padding: 12px 0; }
+.quantum-manual summary { color: #ddc180; cursor: pointer; }
+.quantum-manual a { color: #9de4d0; }
+.quantum-toolbar, .quantum-palette, .quantum-history, .quantum-aes-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.quantum-toolbar { justify-content: space-between; margin: 16px 0; }
+.quantum-tool { display: grid; place-items: center; width: 40px; height: 40px; padding: 6px; background: #153229; border: 1px solid #719985; border-radius: 3px; color: #d2f6dd; font: 18px 'Share Tech Mono', monospace; cursor: grab; touch-action: none; }
+.quantum-tool[aria-pressed="true"] { outline: 2px solid #f1cb83; background: #363321; }
+.quantum-tool svg { width: 18px; height: 18px; }
+.quantum-circuit-scroll { width: 100%; overflow-x: auto; border-block: 1px solid #42675b; padding: 12px 0; scrollbar-color: #5e8877 #0a1917; }
+.quantum-circuit { display: flex; min-width: 726px; width: 100%; }
+.quantum-wire-labels { display: grid; grid-template-rows: 28px repeat(3, 58px); flex: 0 0 66px; color: #b9cbbb; font: 12px 'Share Tech Mono', monospace; }
+.quantum-wire-labels span { display: flex; align-items: center; }
+.quantum-columns { display: grid; grid-template-columns: repeat(12, minmax(55px, 1fr)); flex: 1; }
+.quantum-column { display: grid; grid-template-rows: 28px repeat(3, 58px); position: relative; }
+.quantum-column > span:first-child { text-align: center; color: #b3a479; font: 12px 'Share Tech Mono', monospace; }
+.quantum-cell { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; height: 58px; border: 0; padding: 0; color: #d5f7e1; background: linear-gradient(transparent calc(50% - 1px), #476b5f calc(50% - 1px), #476b5f calc(50% + 1px), transparent calc(50% + 1px)); cursor: pointer; touch-action: none; }
+.quantum-gate-symbol { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #85af98; border-radius: 3px; background: #17382c; font: 18px 'Share Tech Mono', monospace; }
+.quantum-control-dot { display: block; width: 12px; height: 12px; border-radius: 50%; background: #e8c98a; box-shadow: 0 0 0 3px #15251e; }
+.quantum-connector { position: absolute; left: calc(50% - 1px); width: 2px; background: #e8c98a; pointer-events: none; }
+.quantum-cell:focus-visible, .quantum-tool:focus-visible { outline: 2px solid #f1cb83; outline-offset: -2px; }
+.quantum-cell--occupied { cursor: grab; }
+.quantum-drag-preview { position: fixed; z-index: 10000; display: grid; place-items: center; width: 40px; height: 40px; transform: translate(-50%, -50%); border: 1px solid #edc575; background: #18392ded; color: #d8f8df; font-size: 20px; pointer-events: none; }
+.quantum-preview-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.quantum-workspace label { display: grid; gap: 7px; color: #b9c8af; font-size: 13px; min-width: 0; }
+.quantum-workspace input:not([type="range"]), .quantum-workspace select, .quantum-workspace textarea { width: 100%; min-width: 0; padding: 8px; border: 1px solid #4f7063; border-radius: 3px; background: #091b16; color: #dbecdd; font: 13px 'Share Tech Mono', monospace; }
+.quantum-workspace textarea { resize: vertical; overflow-wrap: anywhere; }
+.quantum-step { margin: 18px 0; }
+.quantum-step input { width: 100%; accent-color: #b8d699; }
+.quantum-amplitudes { overflow-x: auto; }
+.quantum-amplitudes table { width: 100%; table-layout: fixed; border-collapse: collapse; color: #c8dfd1; font: 13px 'Share Tech Mono', monospace; }
+.quantum-amplitudes caption { text-align: left; color: #e0c389; margin-bottom: 12px; }
+.quantum-amplitudes th, .quantum-amplitudes td { padding: 7px 4px; border-bottom: 1px solid #264539; text-align: left; overflow-wrap: anywhere; }
+.quantum-amplitudes th:first-child { width: 20%; }
+.quantum-probability { display: inline-block; width: 42%; height: 7px; background: #263c2d; margin-right: 8px; vertical-align: middle; }
+.quantum-probability > span { display: block; height: 100%; background: #bfd48b; }
+.quantum-status { min-height: 24px; color: #ddc180 !important; }
+.quantum-status[data-verified="true"] { color: #9eebac !important; }
+.quantum-aes { margin-top: 28px; border-top: 1px solid #42675b; }
+.quantum-aes [data-key-reward] { display: flex; align-items: end; gap: 10px; margin-bottom: 16px; }
+.quantum-aes [data-key-reward][hidden] { display: none; }
+.quantum-aes [data-key-reward] label { flex: 1; }
+.quantum-aes-meta { display: grid; gap: 12px; margin: 12px 0; color: #a7ba9d; font-size: 12px; }
+.quantum-aes fieldset { margin: 16px 0; padding: 12px; border: 1px solid #42675b; min-width: 0; }
+.quantum-aes fieldset:disabled { opacity: .45; }
+.quantum-aes legend { color: #ddc180; padding: 0 6px; }
+.quantum-aes-actions { margin-top: 12px; }
+.quantum-glyphs { display: flex; flex-wrap: wrap; gap: 12px 16px; padding: 16px 0; }
+.quantum-glyph-word { display: flex; max-width: 100%; }
+.quantum-glyphs .glyph { min-width: 0; width: 27px; height: 35px; flex-shrink: 1; object-fit: contain; }
+.workspace:has(.quantum-workspace), .workspace:has(.playfair-workspace) { perspective: none; }
+.puzzle-panel:has(.quantum-workspace), .puzzle-panel:has(.playfair-workspace) { transform: none !important; transform-style: flat; }
+.playfair-tile[data-feedback="correct"] { border-color: #79dda6; }
+.playfair-tile[data-feedback="incorrect"] { border-color: #fa6973; }
+@media (max-width: 480px) {
+  .quantum-preview-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quantum-preview-controls label:first-child { grid-column: 1 / -1; }
+  .quantum-amplitudes table { font-size: 11px; }
+  .quantum-amplitudes td:last-child .quantum-probability { display: none; }
+  .quantum-glyphs { gap: 10px; }
+  .quantum-glyphs .glyph { width: 23px; height: 31px; }
+}

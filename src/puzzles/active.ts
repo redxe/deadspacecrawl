@@ -1,0 +1,1 @@
+export { default as activePuzzle } from './signal-in-the-dark'

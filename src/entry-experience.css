@@ -1,0 +1,75 @@
+.contact-active { overflow: hidden; }
+.contact-sequence {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  align-items: center;
+  padding: 80px 8%;
+  overflow: hidden;
+  color: #e0f4ed;
+  background: linear-gradient(90deg, #02090bf2, #02090bb0), url('/assets/background.jpg') center / cover;
+  transition: opacity 1.8s ease;
+}
+.contact-sequence::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.14;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, #98b8aa33 3px 4px);
+}
+.contact-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  min-width: 42px;
+  min-height: 42px;
+  color: #b6d6ca;
+  border: 1px solid #6b9b894d;
+  border-radius: 2px;
+  background: #071312e8;
+  cursor: pointer;
+}
+.contact-icon:hover { color: #edfff7; border-color: #a5e4c9; }
+.contact-icon svg { width: 18px; height: 18px; flex-shrink: 0; }
+.radio-control { position: fixed; z-index: 1002; right: 20px; bottom: 42px; }
+.contact-skip { position: absolute; right: 24px; top: 24px; z-index: 2; }
+.contact-transmission { width: min(860px, 100%); position: relative; z-index: 1; margin: auto; }
+.contact-channel, .contact-tail, .contact-handshake { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; line-height: 1.8; }
+.contact-channel { color: #b8d4c8; display: block; }
+.contact-carrier { display: inline-block; width: 7px; height: 7px; background: #e6c57a; margin-right: 10px; box-shadow: 0 0 14px #e6c57a55; }
+.contact-handshake { color: #6d9485; margin: 26px 0; }
+.contact-message { font: 500 2.65rem/1.3 'Rajdhani', sans-serif; margin: 24px 0; min-height: 3.9em; max-width: 800px; overflow-wrap: anywhere; }
+.contact-message > span::after { content: ''; display: inline-block; vertical-align: baseline; width: 0.45em; height: 0.85em; background: #e6c57a; margin-left: 5px; animation: contact-cursor 1.1s steps(2, jump-none) infinite; }
+.contact-tail { color: #658478; margin-top: 32px; }
+.contact-proceed { padding: 8px 14px; margin-top: 24px; font-family: 'Share Tech Mono', monospace; font-size: 0.78rem; }
+.contact-sequence--unlock { padding: 70px 24px; background: #02090b; text-align: center; }
+.contact-aperture { position: absolute; inset: 0; width: 100%; height: 100%; }
+.contact-success { position: relative; z-index: 1; justify-self: center; max-width: 700px; pointer-events: none; text-shadow: 0 2px 20px #000; animation: contact-arrive 1.3s ease both; }
+.contact-success h1 { color: #effff8; font: 600 4.5rem/1.1 'Rajdhani', sans-serif; margin: 24px 0 16px; }
+.contact-success p { font: 500 1.4rem/1.5 'Rajdhani', sans-serif; color: #c4d7d0; margin: 0; }
+.contact-access { display: inline-block; margin-top: 38px; padding: 9px 0; border-top: 1px solid #edc67b; border-bottom: 1px solid #edc67b; color: #edc67b; font: 0.85rem 'Share Tech Mono', monospace; }
+.contact-sequence--departing { opacity: 0; pointer-events: none; }
+@keyframes contact-cursor { 50% { opacity: 0; } }
+@keyframes contact-arrive { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 600px) {
+  .contact-sequence { padding: 76px 26px; }
+  .contact-message { font-size: 2rem; min-height: 6.5em; }
+  .contact-handshake { margin: 18px 0; }
+  .contact-tail { margin-top: 20px; }
+  .contact-success h1 { font-size: 3rem; }
+  .contact-success p { font-size: 1.15rem; }
+  .contact-success .contact-channel { font-size: 0.65rem; }
+  .radio-control { right: 10px; bottom: 32px; }
+}
+@media (max-height: 560px) {
+  .contact-sequence { overflow-y: auto; padding: 60px 26px; }
+  .contact-message { font-size: 1.8rem; min-height: 0; }
+  .contact-handshake, .contact-tail { margin: 12px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .contact-message > span::after, .contact-success { animation: none; }
+  .contact-sequence { transition-duration: 0.4s; }
+}
