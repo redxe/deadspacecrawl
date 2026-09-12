@@ -1,6 +1,8 @@
-import { Mail, X, RefreshCw, createElement } from 'lucide'
+import { Mail, X, RefreshCw, ArrowLeft, ChevronRight, createElement } from 'lucide'
 import { renderGlyphText, type GlyphAtlas } from './glyphs'
 import { decryptSecretMessages, secretDatabaseLimit, type SecretMessage } from './secret-database'
+import { initializeSecretGlyphInput } from './secret-glyph-input'
+import { readSecretProgress, saveSecretProgress } from './secret-progress'
 import './secret-messages.css'
 
 export function initializeSecretMessages(app: HTMLElement, atlas: Promise<GlyphAtlas>) {
@@ -14,6 +16,23 @@ export function initializeSecretMessages(app: HTMLElement, atlas: Promise<GlyphA
   dialog.innerHTML = `<div class="archive-dialog__shell"><header class="archive-dialog__header"><div><span>PRIVATE TRANSMISSIONS</span><h2 id="secret-messages-title">Secret Messages</h2></div><div class="secret-dialog-actions"><button type="button" class="icon-button" title="Reload messages" aria-label="Reload messages" data-secret-reload></button><button type="button" class="icon-button" title="Close secret messages" aria-label="Close secret messages" data-secret-close></button></div></header><label class="secret-search">Search titles<input type="search" autocomplete="off" data-secret-search></label><p class="secret-status" role="status" data-secret-status></p><div class="secret-message-list" data-secret-list></div></div>`
   const find = <ElementType extends HTMLElement>(selector: string) => dialog.querySelector<ElementType>(selector)!
   const list = find('[data-secret-list]'), status = find('[data-secret-status]'), search = find<HTMLInputElement>('[data-secret-search]')
+  const detail = document.createElement('dialog')
+  detail.className = 'archive-dialog secret-messages-dialog secret-detail-dialog'
+  detail.id = 'secret-message-detail'; detail.setAttribute('aria-labelledby', 'secret-detail-title')
+  detail.innerHTML = `<div class="archive-dialog__shell"><header class="archive-dialog__header"><button type="button" class="icon-button" title="Back to messages" aria-label="Back to messages" data-secret-back></button><div><span>PRIVATE TRANSMISSION</span><h2 id="secret-detail-title"></h2><time data-secret-date></time></div><button type="button" class="icon-button" title="Close message" aria-label="Close message" data-detail-close></button></header><div class="secret-detail-body" data-secret-decode></div></div>`
+  const detailTitle = detail.querySelector<HTMLElement>('#secret-detail-title')!
+  const detailBody = detail.querySelector<HTMLElement>('[data-secret-decode]')!
+  const drafts = new Map<string, { text: string; values: string[] }>()
+  let decoder: ReturnType<typeof initializeSecretGlyphInput> | undefined
+  let selectedButton: HTMLButtonElement | undefined
+  detail.querySelector('[data-secret-back]')!.append(createElement(ArrowLeft))
+  detail.querySelector('[data-detail-close]')!.append(createElement(X))
+  function closeDetail() { decoder?.destroy(); detail.close(); if (dialog.open && selectedButton?.isConnected) selectedButton.focus() }
+  detail.querySelector('[data-secret-back]')!.addEventListener('click', closeDetail)
+  detail.querySelector('[data-detail-close]')!.addEventListener('click', closeDetail)
+  detail.addEventListener('click', event => { if (event.target === detail) closeDetail() })
+  detail.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeDetail() } })
+  detail.addEventListener('close', () => { if (detail.open) return; decoder?.destroy(); decoder = undefined; detailBody.replaceChildren(); detailTitle.textContent = ''; if (dialog.open && selectedButton?.isConnected) selectedButton.focus(); selectedButton = undefined })
   let records: SecretMessage[] = []
   let glyphs: GlyphAtlas | undefined
   let generation = 0
@@ -25,12 +44,29 @@ export function initializeSecretMessages(app: HTMLElement, atlas: Promise<GlyphA
     status.textContent = records.length ? `${filtered.length} of ${records.length} messages` : 'No secret messages yet.'
     if (!glyphs) return
     for (const record of filtered) {
-      const article = document.createElement('article'); article.className = 'secret-message'
-      const title = document.createElement('h3'); title.textContent = record.title
+      const article = document.createElement('button'); article.type = 'button'; article.className = 'secret-message'
+      article.setAttribute('aria-label', `Open ${record.title}`); article.setAttribute('aria-haspopup', 'dialog'); article.setAttribute('aria-controls', detail.id)
+      const title = document.createElement('span'); title.className = 'secret-message-title'; title.textContent = record.title
       const timestamp = document.createElement('time'); timestamp.dateTime = record.updatedAt; timestamp.textContent = new Date(record.updatedAt).toLocaleDateString()
-      const content = document.createElement('div'); content.className = 'secret-message-glyphs'; content.setAttribute('aria-label', 'Encoded message')
-      renderGlyphText(content, record.text, glyphs)
-      article.append(title, timestamp, content); list.append(article)
+      const content = document.createElement('div'); content.className = 'secret-message-glyphs'; content.setAttribute('aria-hidden', 'true')
+      renderGlyphText(content, record.text.slice(0, 70).split('\n')[0]!, glyphs)
+      const arrow = createElement(ChevronRight); arrow.classList.add('secret-message-arrow')
+      article.append(title, timestamp, content, arrow)
+      article.addEventListener('click', () => {
+        if (!glyphs) return
+        selectedButton = article
+        detailTitle.textContent = record.title
+        const date = detail.querySelector<HTMLTimeElement>('[data-secret-date]')!
+        date.dateTime = record.updatedAt; date.textContent = timestamp.textContent
+        decoder?.destroy(); detailBody.replaceChildren()
+        const saved = drafts.get(record.id)
+        decoder = initializeSecretGlyphInput(detailBody, record.text, glyphs, saved?.text === record.text ? saved.values : readSecretProgress(record.id, record.updatedAt), values => {
+          drafts.set(record.id, { text: record.text, values })
+          saveSecretProgress(record.id, record.updatedAt, values)
+        })
+        detail.showModal(); detailBody.scrollTop = 0
+      })
+      list.append(article)
     }
   }
   async function load() {
@@ -57,7 +93,7 @@ export function initializeSecretMessages(app: HTMLElement, atlas: Promise<GlyphA
   search.addEventListener('input', render)
   dialog.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); dialog.close() } })
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close() })
-  dialog.addEventListener('close', () => { generation++; controller?.abort(); records = []; list.replaceChildren(); search.value = ''; status.textContent = '' })
-  app.append(dialog)
-  return { destroy: () => { generation++; controller?.abort(); records = []; dialog.remove(); trigger.remove() } }
+  dialog.addEventListener('close', () => { if (dialog.open) return; decoder?.destroy(); detail.close(); drafts.clear(); generation++; controller?.abort(); records = []; list.replaceChildren(); search.value = ''; status.textContent = '' })
+  app.append(dialog, detail)
+  return { destroy: () => { generation++; controller?.abort(); decoder?.destroy(); drafts.clear(); records = []; detail.remove(); dialog.remove(); trigger.remove() } }
 }
