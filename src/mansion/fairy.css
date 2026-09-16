@@ -1,0 +1,18 @@
+.mansion-open:has(.mansion-world--intro) #app { visibility: visible; }
+.mansion-world--intro { animation: fairy-blackout .8s ease-out both; background: #000; }
+.mansion-world--guided .mansion-location, .mansion-world--guided .mansion-touch, .mansion-world--guided .mansion-reticle,
+.mansion-world--guided [aria-label="Lock mouse look"], .mansion-world--guided [aria-label="Walking motion"], .mansion-world--guided [aria-label="Edit pictures"] { display: none; }
+.mansion-world--guided .mansion-hud { justify-content: flex-end; background: none; }
+.mansion-world--guided .mansion-transition { display: none; }
+.fairy-dialogue { position: absolute; left: 50%; bottom: max(7%, 24px); transform: translateX(-50%); width: min(680px, calc(100% - 36px)); display: grid; grid-template-columns: minmax(0, 1fr) 48px; gap: 22px; align-items: end; }
+.fairy-dialogue[hidden] { display: none; }
+.fairy-speech { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 16px; min-height: 100px; color: #e9ffe5; font: 20px 'Rajdhani', sans-serif; }
+.fairy-word { display: inline-flex; flex-shrink: 0; }
+.fairy-word .glyph-line { display: flex; gap: 4px; }
+.fairy-word .glyph { width: 23px; height: 31px; object-fit: contain; flex-shrink: 0; filter: drop-shadow(0 0 5px #a4eab866); }
+.fairy-next { width: 48px; height: 48px; color: #deffdc; border-color: #b2efc577; background: #193c2a99; animation: fairy-continue 1.8s ease-in-out infinite; }
+.fairy-veil { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .65s; }
+@keyframes fairy-blackout { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fairy-continue { 50% { box-shadow: 0 0 15px #a6f0bb55; border-color: #d5ffdc; } }
+@media (max-width: 600px) { .fairy-dialogue { bottom: max(6%, 20px); gap: 12px; grid-template-columns: minmax(0, 1fr) 42px; } .fairy-word .glyph { width: 17px; height: 25px; } .fairy-word .glyph-line { gap: 2px; } .fairy-speech { gap: 12px 10px; } .fairy-next { width: 42px; height: 42px; } }
+@media (prefers-reduced-motion: reduce) { .mansion-world--intro, .fairy-next { animation: none; } .fairy-veil { transition: none; } }

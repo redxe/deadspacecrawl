@@ -1,6 +1,9 @@
 export interface Position { x: number; z: number }
 export const mansionSeed = 'robin-gallery-2026'
 export const ballroomCenter: Position = { x: 0, z: -56 }
+export const hallLampDepths = [-4.35, -13.75, -23.15, -32.55]
+export const ballroomLampDepths = [-53, -59]
+export const ballroomPillarDepths = [-47, -53, -59, -64.5]
 
 export function floorHeight(z: number): number {
   return -3 * Math.max(0, Math.min(1, (-z - 36) / 9)) || 0

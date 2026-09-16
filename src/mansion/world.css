@@ -1,8 +1,8 @@
 .mansion-open { overflow: hidden; }
 .mansion-open #app { visibility: hidden; }
 .mansion-world { position: fixed; inset: 0; z-index: 20000; background: #0c1011; color: #f0f1e9; font-family: 'Rajdhani', sans-serif; touch-action: none; }
-.mansion-canvas { width: 100%; height: 100%; display: block; outline: none; cursor: grab; }
-.mansion-canvas:active { cursor: grabbing; }
+.mansion-canvas { width: 100%; height: 100%; display: block; outline: none; cursor: crosshair; }
+@media (pointer: coarse) { .mansion-canvas { cursor: grab; } .mansion-canvas:active { cursor: grabbing; } }
 .mansion-hud { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 14px; padding: 24px; pointer-events: none; background: linear-gradient(#111b2166, transparent); }
 .mansion-location { text-shadow: 0 1px 5px #0009; }
 .mansion-location span { display: block; font: 12px 'Share Tech Mono', monospace; }

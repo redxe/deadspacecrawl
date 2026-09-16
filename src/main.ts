@@ -298,6 +298,7 @@ function renderBlock(block: PuzzleBlock): HTMLElement {
           resume: () => musicController.resume(),
           muted: () => musicController.muted,
           toggleMute: () => musicController.toggleMute(),
+          spectrum: () => musicController.getSpectrum(),
         },
       })
       customWorkspaces.push({ destroy: () => { mounted = false; workspace.destroy() } })

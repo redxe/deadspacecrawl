@@ -24,6 +24,7 @@ export interface PuzzleExtensionContext {
     resume: () => void
     muted: () => boolean
     toggleMute: () => void
+    spectrum?: () => { bands: readonly number[] } | null
   }
 }
 

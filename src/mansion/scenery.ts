@@ -1,6 +1,11 @@
 import * as THREE from 'three'
 import seedrandom from 'seedrandom'
-import { mansionSeed, pictureFrames } from './layout'
+import { mansionSeed, pictureFrames, ballroomPillarDepths, floorHeight } from './layout'
+import { createEnvironment } from './environment'
+import { createDoorView } from './door-views'
+import type { DoorView } from './door-views'
+import { createWindowGlass } from './window-glass'
+import { createPlayerShadow } from './player-shadow'
 
 export interface FrameSurface { mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>; id: string; placeholder: THREE.Texture }
 
@@ -15,11 +20,14 @@ function canvasTexture(width: number, height: number, draw: (context: CanvasRend
   return texture
 }
 
-export function createScenery(scene: THREE.Scene) {
+export function createScenery(scene: THREE.Scene, sunlight: THREE.DirectionalLight, renderer: THREE.WebGLRenderer) {
   const random = seedrandom(mansionSeed)
   const textures: THREE.Texture[] = []
+  const doorViews: ReturnType<typeof createDoorView>[] = []
   const surfaces: FrameSurface[] = []
+  const windowLight: THREE.MeshBasicMaterial[] = []
   const animated: THREE.Object3D[] = []
+  const playerShadow = createPlayerShadow()
   const boxGeometry = new THREE.BoxGeometry(1, 1, 1)
   const materials = {
     wall: new THREE.MeshStandardMaterial({ color: '#adbbb6', roughness: .92 }),
@@ -28,7 +36,7 @@ export function createScenery(scene: THREE.Scene) {
     gold: new THREE.MeshStandardMaterial({ color: '#aa8950', metalness: .72, roughness: .3 }),
     dark: new THREE.MeshStandardMaterial({ color: '#252b2d', roughness: .65 }),
     door: new THREE.MeshStandardMaterial({ color: '#4e3738', roughness: .7 }),
-    glass: new THREE.MeshBasicMaterial({ color: '#bee6ee', transparent: true, opacity: .055, depthWrite: false, side: THREE.DoubleSide }),
+    glass: createWindowGlass(playerShadow),
     glow: new THREE.MeshBasicMaterial({ color: '#fff0c7' }),
   }
   const box = (width: number, height: number, depth: number, x: number, y: number, z: number, material: THREE.Material) => {
@@ -83,27 +91,35 @@ export function createScenery(scene: THREE.Scene) {
     box(.18, .16, 40, side * 2.91, 4.45, -16, materials.trim)
     box(.3, .12, 40, side * 2.86, 4.63, -16, materials.trim)
     box(.12, .85, 40, side * 3, .54, -16, materials.panel)
-    for (let z = 1; z > -35; z -= 1.55) {
-      box(.08, .62, .035, side * 2.9, .55, z, materials.trim)
-      box(.08, .035, 1.35, side * 2.9, .25, z - .7, materials.trim)
-      box(.08, .035, 1.35, side * 2.9, .86, z - .7, materials.trim)
-    }
+    box(2.08, .85, .12, side * 1.96, .54, 3.04, materials.panel)
+    box(2.08, .18, .16, side * 1.96, .1, 2.99, materials.dark)
+    box(2.08, .13, .13, side * 1.96, 1.04, 2.98, materials.trim)
   }
+  box(5.84, .16, .18, 0, 4.45, 2.97, materials.trim)
+  box(5.72, .12, .3, 0, 4.63, 2.91, materials.trim)
+  const windowMask = canvasTexture(256, 256, context => {
+    context.fillStyle = '#ffffff'; context.shadowColor = '#ffffff'; context.shadowBlur = 3
+    for (const horizontal of [4, 132]) for (const vertical of [4, 132]) context.fillRect(horizontal, vertical, 120, 120)
+  })
+  windowMask.name = 'window-light-mask'; textures.push(windowMask)
   for (let index = 0; index < 8; index++) {
     const z = 1 - index * 4.7
     box(.24, 4.4, 1.05, -3.08, 2.2, z + 2.3, materials.wall)
     box(.24, .9, 3.8, -3.08, .48, z, materials.wall)
     box(.24, .64, 3.8, -3.08, 4.28, z, materials.wall)
     const pane = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3), materials.glass)
+    pane.name = 'hall-window-glass'
     pane.rotation.y = Math.PI / 2; pane.position.set(-3.06, 2.46, z); scene.add(pane)
     for (const offset of [-1.85, 0, 1.85]) box(.12, 3.15, .065, -2.94, 2.45, z + offset, materials.trim)
     for (const y of [.9, 2.6, 4.02]) box(.13, .07, 3.82, -2.94, y, z, materials.trim)
     box(.46, .11, 4, -2.87, .9, z, materials.trim)
-    const sun = new THREE.Mesh(new THREE.PlaneGeometry(4.3, 2.8), new THREE.MeshBasicMaterial({ color: '#f4e4b5', transparent: true, opacity: .13, depthWrite: false, blending: THREE.AdditiveBlending }))
+    const sun = new THREE.Mesh(new THREE.PlaneGeometry(4.3, 2.8), new THREE.MeshBasicMaterial({ map: windowMask, color: '#f4e4b5', transparent: true, opacity: .13, depthWrite: false, blending: THREE.AdditiveBlending }))
+    sun.name = 'window-light-patch'
     sun.rotation.x = -Math.PI / 2; sun.rotation.z = -.28; sun.position.set(-.3, .031, z + 1); scene.add(sun)
-    for (let stripe = 0; stripe < 2; stripe++) box(.065, .007, 3, -.8 + stripe * 1.7, .036, z + 1, new THREE.MeshBasicMaterial({ color: '#313e3a', transparent: true, opacity: .35 }))
+    windowLight.push(sun.material)
   }
-  const door = (x: number, y: number, z: number, rotation: number) => {
+  box(.24, 4.7, 2.3, -3.08, 2.35, -34.85, materials.wall)
+  const door = (x: number, y: number, z: number, rotation: number, view: DoorView) => {
     const group = new THREE.Group(); group.position.set(x, y, z); group.rotation.y = rotation; scene.add(group)
     const part = (width: number, height: number, depth: number, px: number, py: number, pz: number, material: THREE.Material) => {
       const mesh = new THREE.Mesh(boxGeometry, material); mesh.scale.set(width, height, depth); mesh.position.set(px, py, pz); group.add(mesh)
@@ -111,12 +127,23 @@ export function createScenery(scene: THREE.Scene) {
     part(1.3, 2.9, .09, 0, 1.45, 0, materials.door)
     for (const px of [-.73, .73]) part(.13, 3.1, .15, px, 1.5, .08, materials.trim)
     part(1.6, .16, .16, 0, 3, .08, materials.trim)
-    for (const py of [.65, 1.8, 2.48]) part(.94, py === 1.8 ? 1 : .4, .025, 0, py, .06, materials.panel)
+    part(.94, .72, .025, 0, .65, .06, materials.panel)
+    const window = new THREE.Mesh(new THREE.PlaneGeometry(.86, 1.075), new THREE.MeshBasicMaterial())
+    window.name = `closed-door-window-${view}`; window.position.set(0, 2, .083); group.add(window)
+    doorViews.push(createDoorView(view, window, playerShadow))
+    const glass = new THREE.Mesh(window.geometry, materials.glass)
+    glass.name = `door-window-glass-${view}`; glass.position.set(0, 2, .089); group.add(glass)
+    for (const side of [-1, 1]) {
+      part(.055, 1.19, .07, side * .458, 2, .095, materials.trim)
+      part(.97, .055, .07, 0, 2 + side * .568, .095, materials.trim)
+    }
+    part(.035, 1.075, .045, 0, 2, .115, materials.trim)
+    part(.86, .035, .045, 0, 2.08, .115, materials.trim)
     part(.06, .2, .14, .48, 1.24, .14, materials.gold)
   }
-  door(2.86, 0, -9, -Math.PI / 2)
-  door(2.86, 0, -28, -Math.PI / 2)
-  door(0, 0, 2.98, Math.PI)
+  door(2.86, 0, -9, -Math.PI / 2, 'study')
+  door(2.86, 0, -28, -Math.PI / 2, 'conservatory')
+  door(0, 0, 2.98, Math.PI, 'porch')
   for (let index = 0; index < 18; index++) {
     const top = -(index + 1) * 3 / 18
     box(6, 3 + top + .08, .51, 0, (top - 3) / 2, -36 - (index + .5) * .5, materials.trim)
@@ -142,8 +169,15 @@ export function createScenery(scene: THREE.Scene) {
     box(.15, 1.35, 20, side * 9.93, -2.32, -55, materials.panel)
     box(.23, .13, 20, side * 9.86, -1.6, -55, materials.trim)
     box(.26, .2, 20, side * 9.84, 4.4, -55, materials.trim)
-    door(side * 6.4, -3, -45.32, Math.PI)
-    for (let z = -47; z > -65; z -= 4) {
+    for (const [start, end] of [[3, 5.57], [7.23, 9.86]] as const) {
+      const horizontal = side * (start + end) / 2
+      box(end - start, 1.35, .12, horizontal, -2.32, -45.3, materials.panel)
+      box(end - start, .13, .13, horizontal, -1.6, -45.4, materials.trim)
+      box(end - start, .18, .16, horizontal, -2.91, -45.4, materials.dark)
+    }
+    box(6.5, .2, .26, side * 6.5, 4.4, -45.38, materials.trim)
+    door(side * 6.4, -3, -45.32, Math.PI, side < 0 ? 'music-room' : 'tea-room')
+    for (const z of ballroomPillarDepths) {
       box(.32, 7.2, .4, side * 9.82, .6, z, materials.trim)
       box(.5, .24, .62, side * 9.72, 3.9, z, materials.gold)
     }
@@ -159,9 +193,10 @@ export function createScenery(scene: THREE.Scene) {
   const chain = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, 1.8, 6), materials.gold); chain.position.y = .9; chandelier.add(chain)
   for (let index = 0; index < 12; index++) {
     const angle = index * Math.PI / 6
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(.065, 8, 6), materials.glow)
+    const tint = ['#eaaaaf', '#85dcca', '#a2bfea', '#efcc85'][index % 4]!
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(.09, 8, 6), new THREE.MeshBasicMaterial({ color: tint }))
     bulb.position.set(Math.cos(angle) * 1.45, .17, Math.sin(angle) * 1.45); chandelier.add(bulb)
-    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(.11), new THREE.MeshStandardMaterial({ color: '#e7f4f3', metalness: .4, roughness: .12 }))
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(.11), new THREE.MeshStandardMaterial({ color: tint, emissive: tint, emissiveIntensity: .22, metalness: .4, roughness: .12 }))
     crystal.scale.y = 2.5; crystal.position.set(Math.cos(angle) * 1.45, -.32, Math.sin(angle) * 1.45); chandelier.add(crystal)
   }
   const ballroomLight = new THREE.PointLight('#ffe4ad', 85, 24, 2); ballroomLight.position.set(0, 2.7, -56); scene.add(ballroomLight)
@@ -190,7 +225,7 @@ export function createScenery(scene: THREE.Scene) {
   box(140, .2, 190, -81, -.32, -36, grass)
   box(8, .2, 86, -7, -.32, -2, grass)
   box(8, .2, 65, -7, -.32, -98, grass)
-  box(5, .07, 52, -5.7, -.18, -19, new THREE.MeshStandardMaterial({ color: '#8c9476', roughness: 1 }))
+  box(1.35, .07, 38, -5.7, -.18, -16, new THREE.MeshStandardMaterial({ color: '#8c9476', roughness: 1 }))
   const roadVertices: number[] = []
   for (let index = 0; index < 95; index++) {
     const near = 45 - index * 2
@@ -222,6 +257,7 @@ export function createScenery(scene: THREE.Scene) {
     }
   }
   scene.add(trunks, crowns)
+  const environment = createEnvironment(scene, crowns.material, sunlight)
   const dustGeometry = new THREE.BufferGeometry()
   const particles = Array.from({ length: 120 }, () => [random() * 5 - 2.5, random() * 4.2, -random() * 35]).flat()
   dustGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particles, 3))
@@ -242,14 +278,45 @@ export function createScenery(scene: THREE.Scene) {
     batch.computeBoundingSphere()
     scene.add(batch)
   }
+  scene.traverse(object => {
+    if (!(object instanceof THREE.Mesh)) return
+    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+      if (material instanceof THREE.MeshStandardMaterial || object.name === 'window-light-patch' && material instanceof THREE.MeshBasicMaterial) playerShadow.attach(material)
+    }
+  })
+  const shadowLights = scene.children.filter((object): object is THREE.PointLight => object instanceof THREE.PointLight)
+  const shadowFeet = new THREE.Vector3()
+  const shadowSun = new THREE.Vector3()
+  const shadowLamp = new THREE.Vector3()
   return {
     surfaces,
-    animate(time: number, motion: boolean) {
+    render(camera: THREE.PerspectiveCamera) {
+      shadowFeet.set(camera.position.x, floorHeight(camera.position.z), camera.position.z)
+      shadowSun.copy(sunlight.position).sub(sunlight.target.position).normalize()
+      let nearest: THREE.PointLight | undefined
+      let distance = Infinity
+      for (const light of shadowLights) {
+        const next = light.position.distanceTo(camera.position)
+        if (next < distance && next < (light.distance || 24)) { nearest = light; distance = next }
+      }
+      shadowLamp.copy(nearest?.position ?? camera.position)
+      const daylight = THREE.MathUtils.smoothstep(camera.position.z, -36, -33.7)
+      playerShadow.update(shadowFeet, shadowSun, shadowLamp, daylight * (.12 + sunlight.intensity * .045), nearest ? .5 * Math.max(.15, 1 - distance / (nearest.distance || 24)) : 0)
+      doorViews.forEach(view => view.update(renderer, camera))
+      renderer.render(scene, camera)
+    },
+    animate(time: number, motion: boolean, bands: readonly number[] = []) {
+      environment.animate(time, motion, bands)
+      windowLight.forEach((material, index) => { material.opacity = .05 + environment.levels[index % 3]! * .35; material.color.copy(sunlight.color) })
+      ballroomLight.intensity = 35 + environment.levels[1]! * 140
+      ballroomLight.color.setHSL(.08 + environment.levels[2]! * .3, .6, .7)
       if (!motion) return
-      chandelier.rotation.z = Math.sin(time * .35) * .003
+      chandelier.rotation.z = Math.sin(time * .35) * (.003 + environment.levels[1]! * .004)
       dust.position.y = Math.sin(time * .13) * .14
     },
     destroy() {
+      environment.destroy()
+      doorViews.forEach(view => view.destroy())
       const geometries = new Set<THREE.BufferGeometry>()
       const disposableMaterials = new Set<THREE.Material>()
       scene.traverse(object => {

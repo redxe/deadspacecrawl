@@ -3,7 +3,8 @@ import { PointerLockControls } from 'three/addons/controls/PointerLockControls.j
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Footprints, ImagePlus, Maximize, Minimize, MousePointer2, Volume2, VolumeX, X, createElement } from 'lucide'
 import type { IconNode } from 'lucide'
 import { createScenery } from './scenery'
-import { createFootsteps } from './footsteps'
+import { createFootsteps, footstepDistance } from './footsteps'
+import { createFairySequence } from './fairy'
 import { floorHeight, movePosition, spatialMusic } from './layout'
 import { loadGallery, openGalleryEditor, resizePicture } from './pictures'
 import type { Gallery } from './pictures'
@@ -14,9 +15,10 @@ export interface MansionAudio {
   resume: () => void
   muted: () => boolean
   toggleMute: () => void
+  spectrum?: () => { bands: readonly number[] } | null
 }
 
-export function openMansion(audio: MansionAudio, onClose: () => void) {
+export function openMansion(audio: MansionAudio, onClose: () => void, introduction?: { onComplete: () => void }) {
   const root = document.createElement('section')
   root.className = 'mansion-world mansion-world--entering'
   root.setAttribute('role', 'dialog')
@@ -25,6 +27,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
   root.tabIndex = -1
   root.innerHTML = `<canvas class="mansion-canvas" tabindex="0" aria-label="Mansion. Arrow keys or WASD to walk. Drag or lock the mouse to look."></canvas><header class="mansion-hud"><div class="mansion-location"><span>THE GALLERY</span><strong data-room>East Hall</strong></div><div class="mansion-actions"></div></header><div class="mansion-reticle" aria-hidden="true"></div><p class="mansion-status" role="status" aria-live="polite"></p><div class="mansion-touch" aria-label="Walking controls"></div><input type="file" accept="image/jpeg,image/png,image/webp" hidden><div class="mansion-transition" aria-hidden="true"></div>`
   const canvas = root.querySelector<HTMLCanvasElement>('canvas')!
+  canvas.setAttribute('aria-label', 'Mansion. Arrow keys or WASD to walk. Click to capture mouse look; Escape releases it. Drag to look on touch screens.')
   const actions = root.querySelector<HTMLElement>('.mansion-actions')!
   const status = root.querySelector<HTMLElement>('.mansion-status')!
   const fileInput = root.querySelector<HTMLInputElement>('input')!
@@ -47,6 +50,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
   let audioTime = 0
   let animation = 0
   let transitionTimer: ReturnType<typeof setTimeout> | undefined
+  let fairy: ReturnType<typeof createFairySequence> | undefined
   const pressed = new Set<string>()
   const cleanup: Array<() => void> = []
   const loadedTextures = new Set<THREE.Texture>()
@@ -63,10 +67,10 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.15
-  const hemisphere = new THREE.HemisphereLight('#e5f2ff', '#696457', 2.5)
+  const hemisphere = new THREE.HemisphereLight('#e5f2ff', '#696457', 1.1)
   scene.add(hemisphere)
   const sun = new THREE.DirectionalLight('#fff0d5', 2.6); sun.position.set(-24, 32, 15); scene.add(sun)
-  const scenery = createScenery(scene)
+  const scenery = createScenery(scene, sun, renderer)
   const footsteps = createFootsteps()
   const controls = new PointerLockControls(camera, canvas)
   controls.minPolarAngle = .3
@@ -98,6 +102,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
     cleanup.forEach(dispose => dispose())
     controls.dispose()
     footsteps.destroy()
+    fairy?.destroy()
     scenery.destroy()
     loadedTextures.forEach(texture => texture.dispose())
     renderer.dispose()
@@ -122,18 +127,30 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
   }
   document.addEventListener('fullscreenchange', onFullscreen)
   cleanup.push(() => document.removeEventListener('fullscreenchange', onFullscreen))
+  const mouseLockSupported = typeof canvas.requestPointerLock === 'function'
+  const lockFailed = () => { if (!disposed) notify('Mouse capture is unavailable. Drag the view to look around.') }
+  const captureMouse = () => {
+    if (controls.isLocked) return
+    try { const result = canvas.requestPointerLock(); if (result) void result.catch(lockFailed) } catch { lockFailed() }
+  }
+  document.addEventListener('pointerlockerror', lockFailed)
+  cleanup.push(() => document.removeEventListener('pointerlockerror', lockFailed))
   const look = button('Lock mouse look', MousePointer2, () => {
+    if (fairy?.blocking) return
     if (controls.isLocked) controls.unlock()
     else {
       editing = false; updateEditing()
-      try { const result = canvas.requestPointerLock(); if (result) void result.catch(() => notify('Drag the view to look around.')) } catch { notify('Drag the view to look around.') }
+      captureMouse()
     }
   })
   look.setAttribute('aria-pressed', 'false')
-  const onLock = () => { look.setAttribute('aria-pressed', String(controls.isLocked)); clearMovement() }
+  const onLock = () => { look.setAttribute('aria-pressed', String(controls.isLocked)); clearMovement(); if (controls.isLocked) notify('') }
   controls.addEventListener('lock', onLock); controls.addEventListener('unlock', onLock)
   const bounce = button('Walking motion', Footprints, () => { motion = !motion; bounce.setAttribute('aria-pressed', String(motion)) })
   bounce.setAttribute('aria-pressed', String(motion))
+  const onMotionPreference = () => { motion = !motionPreference.matches; bounce.setAttribute('aria-pressed', String(motion)) }
+  motionPreference.addEventListener('change', onMotionPreference)
+  cleanup.push(() => motionPreference.removeEventListener('change', onMotionPreference))
   const mute = button('Mute audio', Volume2, () => { audio.toggleMute(); updateMute() })
   function updateMute() {
     mute.replaceChildren(createElement(audio.muted() ? VolumeX : Volume2))
@@ -155,7 +172,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
     notify('')
   }
   async function toggleEditing() {
-    if (uploading) return
+    if (uploading || fairy?.blocking) return
     if (editing) { editing = false; updateEditing(); return }
     restorePointer()
     try {
@@ -221,10 +238,11 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
     finally { uploading = false; fileInput.value = '' }
   }
   canvas.addEventListener('pointerdown', event => {
-    if (event.button !== 0) return
+    if (event.button !== 0 || fairy?.blocking) return
     audio.resume()
     canvas.focus()
     dragging = { x: event.clientX, y: event.clientY, moved: false }
+    if (event.pointerType === 'mouse' && !editing && mouseLockSupported) { captureMouse(); return }
     canvas.setPointerCapture(event.pointerId)
   })
   canvas.addEventListener('pointermove', event => {
@@ -247,10 +265,10 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
   canvas.addEventListener('pointercancel', clearMovement)
   const keys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'])
   const keydown = (event: KeyboardEvent) => {
-    if (keys.has(event.code)) { event.preventDefault(); if (!uploading) pressed.add(event.code) }
+    if (keys.has(event.code)) { event.preventDefault(); if (!uploading && !fairy?.blocking) pressed.add(event.code) }
     if (event.code === 'Escape') { restorePointer(); if (editing) { editing = false; updateEditing() } }
     if (event.code === 'Tab') {
-      const elements = [...root.querySelectorAll<HTMLElement>('button:not(:disabled),canvas')]
+      const elements = [...root.querySelectorAll<HTMLElement>('button:not(:disabled),canvas')].filter(element => element.getClientRects().length)
       if (event.shiftKey && document.activeElement === elements[0]) { event.preventDefault(); elements.at(-1)?.focus() }
       if (!event.shiftKey && document.activeElement === elements.at(-1)) { event.preventDefault(); elements[0]?.focus() }
     }
@@ -261,7 +279,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
   const touch = root.querySelector<HTMLElement>('.mansion-touch')!
   for (const [key, label, icon] of [['ArrowUp', 'Walk forward', ArrowUp], ['ArrowLeft', 'Walk left', ArrowLeft], ['ArrowDown', 'Walk backward', ArrowDown], ['ArrowRight', 'Walk right', ArrowRight]] as const) {
     const element = document.createElement('button'); element.type = 'button'; element.className = 'mansion-button'; element.dataset.direction = key; element.setAttribute('aria-label', label); element.title = label; element.append(createElement(icon)); touch.append(element)
-    element.addEventListener('pointerdown', event => { event.preventDefault(); audio.resume(); pressed.add(key); element.setPointerCapture(event.pointerId) })
+    element.addEventListener('pointerdown', event => { event.preventDefault(); if (uploading || fairy?.blocking) return; audio.resume(); pressed.add(key); element.setPointerCapture(event.pointerId) })
     element.addEventListener('pointerup', () => pressed.delete(key)); element.addEventListener('pointercancel', () => pressed.delete(key)); element.addEventListener('lostpointercapture', () => pressed.delete(key))
   }
   const resize = () => {
@@ -283,6 +301,14 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
     animation = requestAnimationFrame(tick)
     const delta = Math.min(.05, previousTime ? (timestamp - previousTime) / 1000 : 0)
     previousTime = timestamp
+    fairy?.update(delta)
+    if (fairy?.blocking) {
+      scenery.animate(timestamp / 1000, motion, audio.spectrum?.()?.bands ?? [])
+      audio.setSpatial(spatialMusic({ x: camera.position.x, z: camera.position.z }, camera.rotation.y))
+      root.querySelector('[data-room]')!.textContent = camera.position.z < -45 ? 'The Ballroom' : camera.position.z < -36 ? 'Grand Stair' : 'East Hall'
+      if (timestamp - renderTime >= 1000 / 45) { renderer.render(fairy.scene, fairy.camera); renderTime = timestamp }
+      return
+    }
     let forward = Number(pressed.has('ArrowUp') || pressed.has('KeyW')) - Number(pressed.has('ArrowDown') || pressed.has('KeyS'))
     let sideways = Number(pressed.has('ArrowRight') || pressed.has('KeyD')) - Number(pressed.has('ArrowLeft') || pressed.has('KeyA'))
     const length = Math.hypot(forward, sideways)
@@ -296,7 +322,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
     if (travelled > .0001) {
       stride += travelled * 8
       sinceStep += travelled
-      if (sinceStep > 1.55) { sinceStep = 0; footsteps.step(audio.muted()) }
+      if (sinceStep >= footstepDistance) { sinceStep %= footstepDistance; footsteps.step(audio.muted(), -floorHeight(position.z) / 3) }
     }
     const bob = motion && travelled > .0001 ? Math.sin(stride) * .035 : 0
     camera.position.x = position.x
@@ -304,12 +330,12 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, floorHeight(position.z) + 1.65 + bob, 1 - Math.exp(-delta * 18))
     if (!controls.isLocked) camera.rotation.z = motion && travelled > .0001 ? Math.cos(stride / 2) * .003 : 0
     root.querySelector('[data-room]')!.textContent = position.z < -45 ? 'The Ballroom' : position.z < -36 ? 'Grand Stair' : 'East Hall'
-    scenery.animate(timestamp / 1000, motion)
+    scenery.animate(timestamp / 1000, motion, audio.spectrum?.()?.bands ?? [])
     if (timestamp - audioTime > 80) {
       audioTime = timestamp; const spatial = spatialMusic(position, yaw); audio.setSpatial(spatial)
       root.dataset.x = position.x.toFixed(2); root.dataset.z = position.z.toFixed(2); root.dataset.yaw = yaw.toFixed(3); root.dataset.gain = spatial.gain.toFixed(3); root.dataset.pan = spatial.pan.toFixed(3)
     }
-    if (timestamp - renderTime >= 1000 / 45) { renderer.render(scene, camera); renderTime = timestamp }
+    if (timestamp - renderTime >= 1000 / 45) { scenery.render(camera); renderTime = timestamp }
   }
   document.body.append(root)
   app.inert = true
@@ -318,8 +344,10 @@ export function openMansion(audio: MansionAudio, onClose: () => void) {
   audio.setSpatial(spatialMusic(position, 0))
   audio.resume()
   resize()
-  renderer.render(scene, camera)
-  transitionTimer = setTimeout(() => root.classList.remove('mansion-world--entering'), motion ? 100 : 0)
+  if (introduction) fairy = createFairySequence(root, scene, camera, !motion, introduction.onComplete)
+  if (fairy?.blocking) renderer.render(fairy.scene, fairy.camera)
+  else scenery.render(camera)
+  if (!introduction) transitionTimer = setTimeout(() => root.classList.remove('mansion-world--entering'), motion ? 100 : 0)
   animation = requestAnimationFrame(tick)
   return { destroy: exit }
 }

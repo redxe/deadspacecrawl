@@ -54,8 +54,8 @@ function setup(volume = .42, unlocked = true) {
     './music-library': { builtInSongs: songs, loadMusicState: () => state, saveMusicState: next => { saved.push(JSON.parse(JSON.stringify(next))); return true } },
     './music-editor': { initializeMusicEditor: () => ({ refresh() {}, setPlayback() {}, destroy() {} }) },
     './music-visualizer': { initializeMusicVisualizer: () => ({ update() {}, destroy() {} }) },
-    './music-player': { createMusicPlayer: (code, initialVolume, autoplay, onState) => {
-      const player = { frame: new Element(), code, initialVolume, autoplay, volumes: [], spatial: [], plays: 0, pauses: 0, onState, play() { this.plays++ }, pause() { this.pauses++ }, setSpatial(gain, pan) { this.spatial.push({ gain, pan }) }, setVolume(next) { this.volumes.push(next) }, setHighlighting() {}, setVisualizing() {}, destroy() { this.destroyed = true } }
+    './music-player': { createMusicPlayer: (code, initialVolume, autoplay, onState, onRanges, onSpectrum) => {
+      const player = { frame: new Element(), code, initialVolume, autoplay, volumes: [], spatial: [], plays: 0, pauses: 0, onState, onSpectrum, play() { this.plays++ }, pause() { this.pauses++ }, setSpatial(gain, pan) { this.spatial.push({ gain, pan }) }, setVolume(next) { this.volumes.push(next) }, setHighlighting() {}, setVisualizing(enabled) { this.visualizing = enabled }, destroy() { this.destroyed = true } }
       players.push(player)
       return player
     } },
@@ -173,4 +173,22 @@ test('gallery playback resumes after hiding without rewriting the normal playbac
   view.document.events.get('visibilitychange')()
   assert.equal(player.plays, 2)
   assert.equal(view.state.enabled, false)
+})
+
+test('the gallery receives live Strudel spectrum while mute and pause clear its response', () => {
+  const view = setup()
+  const player = view.players[0]
+  view.music.setSpatial({ gain: .2, pan: 0 })
+  player.onState({ status: 'playing' })
+  const spectrum = { bands: Array(48).fill(.4), waveform: Array(64).fill(0) }
+  player.onSpectrum(spectrum)
+  assert.equal(player.visualizing, true)
+  assert.equal(view.music.getSpectrum(), spectrum)
+  view.music.toggleMute()
+  assert.equal(player.visualizing, false)
+  assert.equal(view.music.getSpectrum(), null)
+  view.music.toggleMute()
+  player.onSpectrum(spectrum)
+  player.onState({ status: 'paused' })
+  assert.equal(view.music.getSpectrum(), null)
 })

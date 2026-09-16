@@ -9,6 +9,9 @@ import '../glyph-wordle.css'
 export function initializeGlyphWordle(element: HTMLElement, context: PuzzleExtensionContext) {
   const key = `signal-archive.glyph-wordle.v1.${context.puzzle.id}`
   let state = freshWordle()
+  const introductionKey = `signal-archive.fairy-introduction.v1.${context.puzzle.id}`
+  let introduced = false
+  if (!context.preview) { try { introduced = localStorage.getItem(introductionKey) === 'complete' } catch {} }
   if (!context.preview) { try { state = restoreWordle(localStorage.getItem(key)) } catch {} }
   let atlas: GlyphAtlas | undefined
   let disposed = false
@@ -90,7 +93,10 @@ export function initializeGlyphWordle(element: HTMLElement, context: PuzzleExten
     try {
       const module = await import('../mansion/world')
       if (disposed) return
-      world = module.openMansion(audio, () => { world = undefined; status.textContent = 'Signal retained.'; input.focus() })
+      world = module.openMansion(audio, () => { world = undefined; status.textContent = 'Signal retained.'; revisit.focus() }, introduced ? undefined : { onComplete: () => {
+        introduced = true
+        if (!context.preview) { try { localStorage.setItem(introductionKey, 'complete') } catch {} }
+      } })
       status.textContent = 'Signal retained.'
     } catch { status.textContent = 'The gallery could not open. Check WebGL support, then retry.' }
     finally { opening = false; if (!disposed) render() }

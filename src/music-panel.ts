@@ -3,7 +3,7 @@ import type { IconNode } from 'lucide'
 import { builtInSongs, loadMusicState, saveMusicState, validateSong } from './music-library'
 import type { Song } from './music-library'
 import { createMusicPlayer } from './music-player'
-import type { MusicStatus } from './music-player'
+import type { MusicStatus, MusicSpectrum } from './music-player'
 import { initializeMusicEditor } from './music-editor'
 import { initializeMusicVisualizer } from './music-visualizer'
 import './music.css'
@@ -23,6 +23,7 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
   let previousVolume = state.volume || 0.25
   let playingCode = ''
   let spatial: { gain: number; pan: number } | null = null
+  let spectrum: MusicSpectrum | null = null
   const muteListeners = new Set<(muted: boolean) => void>()
 
   const button = (label: string, icon: IconNode): HTMLButtonElement => {
@@ -81,9 +82,10 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
     player?.setHighlighting(dialog.open && editor.open && !document.hidden && codeInput.value === playingCode)
   }
   const updateVisualization = (): void => {
-    const enabled = !spatial && !document.hidden && !motion.matches && state.volume > 0
+    const enabled = !document.hidden && !motion.matches && state.volume > 0
     player?.setVisualizing(enabled)
-    if (!enabled) visualizer.update(null)
+    if (!enabled) spectrum = null
+    if (!enabled || spatial) visualizer.update(null)
   }
   motion.addEventListener('change', updateVisualization)
   const notify = (message: string, error = false): void => {
@@ -159,7 +161,7 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
       }
       notify(next.detail ?? messages[status], status === 'error')
       if (next.manual) persist()
-    }, ranges => scoreEditor.setPlayback(code, ranges), visualizer.update)
+    }, ranges => scoreEditor.setPlayback(code, ranges), next => { spectrum = next; if (!spatial) visualizer.update(next) })
     updateVisualization()
     host.replaceChildren(player.frame)
     timeout = setTimeout(() => {
@@ -279,5 +281,5 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
     }
     player?.setSpatial(next?.gain ?? 1, next?.pan ?? 0)
   }
-  return { unlock, destroy, toggleMute, subscribeMute, setSpatial, resume: () => { if (status !== 'playing' && status !== 'loading') player?.play() }, get muted() { return state.volume === 0 } }
+  return { unlock, destroy, toggleMute, subscribeMute, setSpatial, getSpectrum: () => status === 'playing' && state.volume > 0 && !document.hidden ? spectrum : null, resume: () => { if (status !== 'playing' && status !== 'loading') player?.play() }, get muted() { return state.volume === 0 } }
 }
