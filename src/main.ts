@@ -23,20 +23,19 @@ import {
 import { initializeConsole } from './console-panel'
 import { loadGlyphAtlas, renderGlyphText } from './glyphs'
 import { initializeGlyphFeedback } from './glyph-feedback'
-import { activePuzzle as archivePuzzle } from './puzzles/active'
+import { publishedPuzzles } from './puzzles/library'
+import { validatePuzzle } from './puzzles/catalog'
+import { puzzleExtensions, validateExtensions } from './puzzles/extensions'
 import { createEntryGate } from './entry-gate'
 import { initializeEntryExperience } from './entry-experience'
 import { initializeMusic } from './music-panel'
 import { initializeTypingSounds } from './typing-sounds'
 import { initializePuzzlePath } from './puzzle-path'
-import pairedSignal from './puzzles/paired-signal'
 import { initializePlayfairWorkspace } from './playfair-workspace'
-import quantumRelay from './puzzles/quantum-relay'
 import { initializeQuantumWorkspace } from './quantum-workspace'
-import fourierSignal from './puzzles/fourier-signal'
 import { initializeFourierWorkspace, fourierStorageKey } from './fourier-workspace'
 import { initializeSecretMessages } from './secret-messages'
-import type { PuzzleBlock } from './puzzles/types'
+import type { Puzzle, PuzzleBlock } from './puzzles/types'
 import { answerMatches } from './puzzles/types'
 import { initializeScene } from './scene'
 import {
@@ -53,8 +52,22 @@ if (!appRoot) {
 }
 
 const app = appRoot
-const entryGate = createEntryGate()
-const archivePuzzles = [archivePuzzle, pairedSignal, quantumRelay, fourierSignal]
+let previewPuzzle: Puzzle | undefined
+if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview')) {
+  try {
+    const candidate: unknown = JSON.parse(sessionStorage.getItem('signal-archive.authoring-preview.v1') ?? 'null')
+    validatePuzzle(candidate)
+    validateExtensions(candidate)
+    previewPuzzle = candidate
+  } catch {
+    app.textContent = 'Preview unavailable. Return to the puzzle editor and launch a new preview.'
+    throw new Error('Invalid authoring preview.')
+  }
+}
+const entryGate = previewPuzzle ? { locked: false, puzzle: undefined, path: [], submit: (_value: string) => false } : createEntryGate()
+const archivePuzzles = previewPuzzle ? [previewPuzzle] : publishedPuzzles
+const archivePuzzle = archivePuzzles[0]
+if (!archivePuzzle) throw new Error('The puzzle catalog must contain at least one visible puzzle.')
 const completedThisVisit = new Set<string>()
 const isCompleted = (id: string): boolean => completedThisVisit.has(id) || getPuzzleRecord(id)?.solved === true
 const canOpenPuzzle = (id: string): boolean => {
@@ -64,10 +77,11 @@ const canOpenPuzzle = (id: string): boolean => {
 let activePuzzle = entryGate.puzzle ?? archivePuzzle
 try {
   const selected = localStorage.getItem('signal-archive.selected-puzzle.v1')
-  if (selected && canOpenPuzzle(selected)) activePuzzle = archivePuzzles.find(puzzle => puzzle.id === selected)!
+  if (!previewPuzzle && selected && canOpenPuzzle(selected)) activePuzzle = archivePuzzles.find(puzzle => puzzle.id === selected)!
 } catch {}
 
 document.title = `${activePuzzle.sequence} // ${activePuzzle.title}`
+const escapeMarkup = (value: string): string => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
 
 app.innerHTML = `
   <canvas class="void-scene" data-scene aria-hidden="true"></canvas>
@@ -81,12 +95,12 @@ app.innerHTML = `
       <div class="system-brand">
         <span class="system-brand__mark"><i data-lucide="radio"></i></span>
         <span class="system-brand__name">SIGNAL ARCHIVE</span>
-        <span class="system-brand__channel">PRIVATE RELAY / ${activePuzzle.sequence}</span>
+        <span class="system-brand__channel">PRIVATE RELAY / ${escapeMarkup(activePuzzle.sequence)}</span>
       </div>
 
       <div class="system-actions">
         <span class="link-state"><span class="link-state__pulse"></span>LINK STABLE</span>
-        <button class="icon-text-button" type="button" data-open-archive ${entryGate.locked ? 'hidden disabled' : ''}>
+        <button class="icon-text-button" type="button" data-open-archive ${entryGate.locked || previewPuzzle ? 'hidden disabled' : ''}>
           <i data-lucide="archive"></i>
           <span>Archive</span>
           <span class="archive-count" data-archive-count>0</span>
@@ -97,8 +111,8 @@ app.innerHTML = `
     <main class="workspace">
       <aside class="mission-index" aria-label="Puzzle status">
         <span class="mission-index__eyebrow">ACTIVE SIGNAL</span>
-        <strong class="mission-index__number">${activePuzzle.sequence.split(' / ')[0]}</strong>
-        <span class="mission-index__kind">${activePuzzle.kind}</span>
+        <strong class="mission-index__number">${escapeMarkup(activePuzzle.sequence.split(' / ')[0]!)}</strong>
+        <span class="mission-index__kind">${escapeMarkup(activePuzzle.kind)}</span>
         <div class="mission-index__rule"></div>
         <span class="mission-index__status" data-mission-status>UNRESOLVED</span>
       </aside>
@@ -112,8 +126,8 @@ app.innerHTML = `
         <header class="puzzle-header">
           <div>
             <span class="puzzle-header__category">${activePuzzle.kind.toUpperCase()} PROTOCOL</span>
-            <h1>${activePuzzle.title}</h1>
-            <p>${activePuzzle.summary}</p>
+            <h1>${escapeMarkup(activePuzzle.title)}</h1>
+            <p>${escapeMarkup(activePuzzle.summary)}</p>
           </div>
           <div class="signal-meter" aria-label="Signal strength: stable">
             <span></span><span></span><span></span><span></span><span></span>
@@ -122,13 +136,13 @@ app.innerHTML = `
 
         <section class="objective-strip">
           <span>OBJECTIVE</span>
-          <p>${activePuzzle.objective}</p>
+          <p>${escapeMarkup(activePuzzle.objective)}</p>
         </section>
 
         <section class="puzzle-content" data-puzzle-content></section>
 
         <form class="answer-form" data-answer-form novalidate>
-          <label for="answer-input">${activePuzzle.answer.label}</label>
+          <label for="answer-input">${escapeMarkup(activePuzzle.answer.label)}</label>
           <div class="answer-control">
             <span class="answer-control__prompt" aria-hidden="true">&gt;</span>
             <input
@@ -137,7 +151,7 @@ app.innerHTML = `
               type="text"
               autocomplete="off"
               spellcheck="false"
-              placeholder="${activePuzzle.answer.placeholder}"
+              placeholder="${escapeMarkup(activePuzzle.answer.placeholder)}"
               data-answer-input
             />
             <button class="submit-button" type="submit">
@@ -251,6 +265,16 @@ const glyphAtlas = loadGlyphAtlas(`${import.meta.env.BASE_URL}assets/characters.
 let playfairWorkspace: ReturnType<typeof initializePlayfairWorkspace> | undefined
 let quantumWorkspace: ReturnType<typeof initializeQuantumWorkspace> | undefined
 let fourierWorkspace: ReturnType<typeof initializeFourierWorkspace> | undefined
+const customWorkspaces: Array<{ destroy: () => void }> = []
+const blockReadiness = new Map<PuzzleBlock, boolean>()
+function setBlockReady(block: PuzzleBlock, ready: boolean): void {
+  blockReadiness.set(block, ready)
+  const blocked = [...blockReadiness.values()].some(value => !value)
+  answerInput.disabled = blocked
+  getRequiredElement<HTMLButtonElement>('.submit-button').disabled = blocked
+  answerInput.placeholder = blocked ? 'Complete the interactive blocks first' : activePuzzle.answer.placeholder
+  glyphFeedback.refresh()
+}
 const glyphFeedback = initializeGlyphFeedback(
   answerInput,
   getRequiredElement<HTMLButtonElement>('.submit-button'),
@@ -259,31 +283,50 @@ const glyphFeedback = initializeGlyphFeedback(
 )
 
 function renderBlock(block: PuzzleBlock): HTMLElement {
+  if (block.type === 'custom') {
+    setBlockReady(block, false)
+    let mounted = true
+    try {
+      validateExtensions({ ...activePuzzle, blocks: [block] })
+      const extension = puzzleExtensions.find(candidate => candidate.id === block.plugin)!
+      const workspace = extension.mount(block.config, {
+        puzzle: activePuzzle, preview: !!previewPuzzle,
+        setReady: ready => { if (mounted) setBlockReady(block, ready) },
+        complete: answer => { if (mounted) submitAnswer(answer) },
+        audio: {
+          setSpatial: state => musicController.setSpatial(state),
+          resume: () => musicController.resume(),
+          muted: () => musicController.muted,
+          toggleMute: () => musicController.toggleMute(),
+        },
+      })
+      customWorkspaces.push({ destroy: () => { mounted = false; workspace.destroy() } })
+      return workspace.element
+    } catch (error) {
+      mounted = false
+      setBlockReady(block, false)
+      const message = document.createElement('p')
+      message.className = 'answer-feedback answer-feedback--error'
+      message.textContent = `Custom block unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`
+      return message
+    }
+  }
   if (block.type === 'fourier') {
     fourierWorkspace = initializeFourierWorkspace(glyphAtlas, ready => {
-      answerInput.disabled = !ready
-      getRequiredElement<HTMLButtonElement>('.submit-button').disabled = !ready
-      answerInput.placeholder = ready ? 'Enter the decoded transmission' : 'Recover the glyph word and decrypt RSA first'
-      glyphFeedback.refresh()
-    })
+      setBlockReady(block, ready)
+    }, previewPuzzle ? null : activePuzzle.id === 'fourier-signal' ? fourierStorageKey : `${fourierStorageKey}.${activePuzzle.id}`)
     return fourierWorkspace.element
   }
   if (block.type === 'quantum') {
     quantumWorkspace = initializeQuantumWorkspace(glyphAtlas, ready => {
-      answerInput.disabled = !ready
-      getRequiredElement<HTMLButtonElement>('.submit-button').disabled = !ready
-      answerInput.placeholder = ready ? 'Enter the decoded transmission' : 'Verify the circuit and decrypt the transmission first'
-      glyphFeedback.refresh()
-    })
+      setBlockReady(block, ready)
+    }, previewPuzzle ? null : `signal-archive.quantum-work.v1${activePuzzle.id === 'quantum-relay' ? '' : `.${activePuzzle.id}`}`)
     return quantumWorkspace.element
   }
   if (block.type === 'playfair') {
     playfairWorkspace = initializePlayfairWorkspace(glyphAtlas, ready => {
-      answerInput.disabled = !ready
-      getRequiredElement<HTMLButtonElement>('.submit-button').disabled = !ready
-      answerInput.placeholder = ready ? 'Restore the sentence, including punctuation' : 'Complete the pair worksheet first'
-      glyphFeedback.refresh()
-    })
+      setBlockReady(block, ready)
+    }, previewPuzzle ? null : `signal-archive.playfair-work.v1${activePuzzle.id === 'paired-signal' ? '' : `.${activePuzzle.id}`}`)
     return playfairWorkspace.element
   }
   if (block.type === 'divider') {
@@ -332,6 +375,7 @@ function renderBlock(block: PuzzleBlock): HTMLElement {
 }
 
 activePuzzle.blocks.forEach((block) => puzzleContent.append(renderBlock(block)))
+answerForm.hidden = activePuzzle.blocks.some(block => block.type === 'custom' && block.plugin === 'glyph-wordle')
 
 glyphAtlas
   .then((glyphs) => {
@@ -434,7 +478,7 @@ function renderArchive(): void {
 }
 
 function applyRecordState(): void {
-  if (entryGate.locked) return
+  if (entryGate.locked || previewPuzzle) return
   const record = getPuzzleRecord(activePuzzle.id)
   const attempts = record?.attempts.length ?? 0
   attemptCount.textContent = `${attempts} ATTEMPT${attempts === 1 ? '' : 'S'}`
@@ -452,19 +496,9 @@ function applyRecordState(): void {
 
 function submitAnswer(value: string): void {
   if (entryExperience.busy) return
-  if (activePuzzle.id === fourierSignal.id && !fourierWorkspace?.ready) {
+  if ([...blockReadiness.values()].some(ready => !ready)) {
     answerFeedback.className = 'answer-feedback answer-feedback--error'
-    answerFeedback.textContent = 'Recover the six glyphs and decrypt the RSA transmission before submitting.'
-    return
-  }
-  if (activePuzzle.id === quantumRelay.id && !quantumWorkspace?.ready) {
-    answerFeedback.className = 'answer-feedback answer-feedback--error'
-    answerFeedback.textContent = 'Verify the state transfer and decrypt the glyph transmission before submitting.'
-    return
-  }
-  if (activePuzzle.id === pairedSignal.id && !playfairWorkspace?.ready) {
-    answerFeedback.className = 'answer-feedback answer-feedback--error'
-    answerFeedback.textContent = 'Verify the key square and recovered pairs before restoring the transmission.'
+    answerFeedback.textContent = 'Complete the interactive blocks before submitting.'
     return
   }
   const answer = value.trim()
@@ -493,6 +527,11 @@ function submitAnswer(value: string): void {
     return
   }
   const correct = answerMatches(activePuzzle, answer)
+  if (previewPuzzle) {
+    answerFeedback.className = `answer-feedback answer-feedback--${correct ? 'success' : 'error'}`
+    answerFeedback.textContent = correct ? 'Preview answer verified. Player progress unchanged.' : 'Checksum mismatch. Recheck the signal.'
+    return
+  }
   const record = saveAttempt(activePuzzle, answer, correct)
   attemptCount.textContent = `${record.attempts.length} ATTEMPT${record.attempts.length === 1 ? '' : 'S'}`
 
@@ -521,6 +560,8 @@ answerForm.addEventListener('submit', (event) => {
 
 let hintIndex = 0
 function refreshPuzzle(): void {
+  customWorkspaces.splice(0).forEach(workspace => workspace.destroy())
+  blockReadiness.clear()
   fourierWorkspace?.destroy()
   fourierWorkspace = undefined
   quantumWorkspace?.destroy()
@@ -552,6 +593,7 @@ function refreshPuzzle(): void {
   cipherTargets.length = 0
   puzzleContent.replaceChildren()
   activePuzzle.blocks.forEach(block => puzzleContent.append(renderBlock(block)))
+  answerForm.hidden = activePuzzle.blocks.some(block => block.type === 'custom' && block.plugin === 'glyph-wordle')
   void glyphAtlas.then(glyphs => {
     cipherTargets.forEach(({ element, text }) => {
       element.classList.remove('cipher-block--loading')
@@ -561,8 +603,8 @@ function refreshPuzzle(): void {
   }).catch(() => cipherTargets.forEach(({ element }) => { element.textContent = 'GLYPH ARRAY UNAVAILABLE' }))
   glyphFeedback.refresh()
   const archiveButton = getRequiredElement<HTMLButtonElement>('[data-open-archive]')
-  archiveButton.hidden = entryGate.locked
-  archiveButton.disabled = entryGate.locked
+  archiveButton.hidden = entryGate.locked || !!previewPuzzle
+  archiveButton.disabled = entryGate.locked || !!previewPuzzle
   attemptCount.textContent = entryGate.locked ? 'ACCESS SEAL' : '0 ATTEMPTS'
   applyRecordState()
   answerInput.focus()
@@ -577,7 +619,7 @@ hintButton.addEventListener('click', () => {
 })
 
 app.querySelector('[data-open-archive]')?.addEventListener('click', () => {
-  if (entryGate.locked) return
+  if (entryGate.locked || previewPuzzle) return
   renderArchive()
   archiveDialog.showModal()
 })
@@ -587,6 +629,7 @@ app.querySelector('[data-close-archive]')?.addEventListener('click', () => {
 })
 
 app.querySelector('[data-clear-archive]')?.addEventListener('click', () => {
+  if (previewPuzzle) return
   if (!window.confirm('Erase every locally saved solution and attempt?')) {
     return
   }
@@ -623,7 +666,7 @@ initializePuzzlePath(app, () => [
   ...entryGate.path,
   ...archivePuzzles.map(puzzle => ({ id: puzzle.id, title: puzzle.title, completed: isCompleted(puzzle.id), configured: true, reviewable: true })),
   ...Array.from({ length: 1 }, (_, index) => ({
-    id: `upcoming-${index + 5}`, title: `Puzzle ${String(index + 5).padStart(2, '0')}`,
+    id: `upcoming-${index + archivePuzzles.length + 1}`, title: `Puzzle ${String(index + archivePuzzles.length + 1).padStart(2, '0')}`,
     completed: false, configured: false,
   })),
 ], id => {
@@ -631,13 +674,20 @@ initializePuzzlePath(app, () => [
   if (id === entryGate.puzzle?.id) { answerInput.focus(); return }
   if (!canOpenPuzzle(id)) return
   activePuzzle = archivePuzzles.find(puzzle => puzzle.id === id)!
-  try { localStorage.setItem('signal-archive.selected-puzzle.v1', id) } catch {}
+  try { if (!previewPuzzle) localStorage.setItem('signal-archive.selected-puzzle.v1', id) } catch {}
   refreshPuzzle()
   consoleController.setPuzzle(activePuzzle)
 })
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-initializeSecretMessages(app, glyphAtlas)
+if (!previewPuzzle) initializeSecretMessages(app, glyphAtlas)
+if (import.meta.env.DEV) {
+  const editorLink = document.createElement('a')
+  editorLink.className = 'icon-text-button'
+  editorLink.href = '?admin'
+  editorLink.textContent = previewPuzzle ? 'Back to editor' : 'Puzzle editor'
+  app.querySelector('.system-actions')!.prepend(editorLink)
+}
 if (!reducedMotion) {
   window.addEventListener('pointermove', (event) => {
     const horizontal = (event.clientX / window.innerWidth - 0.5) * 1.2

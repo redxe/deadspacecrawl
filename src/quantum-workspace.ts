@@ -8,7 +8,7 @@ import './quantum.css'
 const storageKey = 'signal-archive.quantum-work.v1'
 type Selection = { cell: Exclude<CircuitCell, null> | 'erase'; from?: [number, number] }
 
-export function initializeQuantumWorkspace(atlas: Promise<GlyphAtlas>, onReady: (ready: boolean) => void) {
+export function initializeQuantumWorkspace(atlas: Promise<GlyphAtlas>, onReady: (ready: boolean) => void, persistenceKey: string | null = storageKey) {
   const element = document.createElement('section')
   element.className = 'quantum-workspace'
   element.setAttribute('aria-label', 'Quantum teleportation workbench')
@@ -26,7 +26,7 @@ export function initializeQuantumWorkspace(atlas: Promise<GlyphAtlas>, onReady: 
   const redo: Circuit[] = []
   let preview: HTMLElement | undefined
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null')
+    const saved = JSON.parse((persistenceKey ? localStorage.getItem(persistenceKey) : null) ?? 'null')
     if (isCircuit(saved?.circuit)) {
       circuit = saved.circuit
       verified = saved.verified === true && verifyTeleportation(circuit).valid
@@ -76,7 +76,7 @@ export function initializeQuantumWorkspace(atlas: Promise<GlyphAtlas>, onReady: 
   find<HTMLInputElement>('[data-iv]').value = messageIv
   const clone = (value: Circuit): Circuit => value.map(column => [...column])
   const persist = () => {
-    try { localStorage.setItem(storageKey, JSON.stringify({ circuit, verified, decrypted: !!plaintext })) } catch {}
+    try { if (persistenceKey) localStorage.setItem(persistenceKey, JSON.stringify({ circuit, verified, decrypted: !!plaintext })) } catch {}
   }
   function clearMessage() {
     generation++

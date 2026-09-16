@@ -1,0 +1,30 @@
+.glyph-wordle { width: min(100%, 480px); margin: 0 auto; }
+.glyph-wordle-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; font: 11px 'Share Tech Mono', monospace; color: var(--muted); }
+.glyph-wordle-legend { display: flex; gap: 10px; }
+.glyph-wordle-legend span::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 5px; background: #38534a; }
+.glyph-wordle-legend [data-state=right]::before { background: #69cfa0; }
+.glyph-wordle-legend [data-state=almost]::before { background: #e1bd6a; }
+.glyph-wordle-board { width: min(100%, 320px); margin: 0 auto 20px; display: grid; grid-template-rows: repeat(6, 1fr); gap: 6px; aspect-ratio: 5 / 6; }
+.glyph-wordle-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; min-height: 0; }
+.glyph-wordle-tile { display: grid; place-items: center; min-width: 0; min-height: 0; border: 1px solid #36514e; background: #0a1819; color: #e2eee8; font: 22px 'Share Tech Mono', monospace; border-radius: 2px; }
+.glyph-wordle-tile img { width: 64%; height: 72%; object-fit: contain; }
+.glyph-wordle [data-state=right]:not(span) { border-color: #7ee9b5; background: #255941; }
+.glyph-wordle [data-state=almost]:not(span) { border-color: #e7c777; background: #5b502b; }
+.glyph-wordle [data-state=wrong]:not(span) { border-color: #39454a; background: #172327; }
+.glyph-wordle [data-state=almost] img { filter: grayscale(1) sepia(.8); }
+.glyph-wordle [data-state=wrong] img { filter: grayscale(1); opacity: .4; }
+.glyph-wordle-input { display: grid; gap: 6px; margin-bottom: 16px; }
+.glyph-wordle-input > label { font-size: 14px; color: var(--muted); }
+.glyph-wordle-input > div { display: flex; gap: 8px; }
+.glyph-wordle-input input { width: 100%; min-width: 0; color: var(--cyan-bright); background: #030c0d; border: 1px solid var(--line); padding: 10px 12px; font: 18px 'Share Tech Mono', monospace; }
+.glyph-wordle-input button { width: 44px; height: 44px; flex-shrink: 0; }
+.glyph-wordle-keyboard { display: grid; gap: 6px; }
+.glyph-wordle-key-row { display: flex; justify-content: center; gap: 4px; }
+.glyph-wordle-key { width: calc((100% - 36px) / 10); height: 48px; padding: 5px; border: 1px solid var(--line); border-radius: 3px; background: #122829; display: grid; place-items: center; cursor: pointer; min-width: 0; }
+.glyph-wordle-key img { width: 100%; height: 34px; object-fit: contain; }
+.glyph-wordle-key svg { width: 18px; height: 18px; }
+.glyph-wordle-status { min-height: 24px; margin: 14px 0 8px; color: #c5d8c9; font-size: 15px; }
+.glyph-wordle-actions { display: flex; gap: 10px; }
+.glyph-wordle--solved .glyph-wordle-board { filter: drop-shadow(0 0 12px #8bebbc33); }
+@media (max-width: 480px) { .glyph-wordle-key { height: 40px; padding: 3px; } .glyph-wordle-key img { height: 28px; } .glyph-wordle-meta { font-size: 10px; } }
+@media (prefers-reduced-motion: no-preference) { .glyph-wordle-tile[data-state=right], .glyph-wordle-tile[data-state=almost], .glyph-wordle-tile[data-state=wrong] { transition: background .25s, border-color .25s; } }

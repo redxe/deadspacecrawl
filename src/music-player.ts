@@ -24,6 +24,9 @@ function playerRuntime(code: string, initialVolume: number, autoplay: boolean, p
   let audio: AudioContext
   let repl: Repl | undefined
   let volume = initialVolume
+  let spatialGain = 1
+  let spatialPan = 0
+  let panner: StereoPannerNode | undefined
   let playing = false
   let pending = false
   let evaluationError = ''
@@ -105,8 +108,20 @@ function playerRuntime(code: string, initialVolume: number, autoplay: boolean, p
     const gain = engine.getSuperdoughAudioController().output.destinationGain.gain
     if (immediate || audio.state !== 'running') {
       gain.cancelScheduledValues(audio.currentTime)
-      gain.setValueAtTime(volume * 0.6, audio.currentTime)
-    } else gain.setTargetAtTime(volume * 0.6, audio.currentTime, 0.08)
+      gain.setValueAtTime(volume * spatialGain * 0.6, audio.currentTime)
+    } else gain.setTargetAtTime(volume * spatialGain * 0.6, audio.currentTime, 0.08)
+  }
+  const applySpatial = (): void => {
+    if (!audio) return
+    if (!panner && typeof audio.createStereoPanner === 'function') {
+      const output = engine.getSuperdoughAudioController().output.destinationGain
+      panner = audio.createStereoPanner()
+      panner.connect(audio.destination)
+      output.disconnect(audio.destination)
+      output.connect(panner)
+    }
+    panner?.pan.setTargetAtTime(spatialPan, audio.currentTime, .08)
+    applyVolume()
   }
   const stop = (manual = false): void => {
     generation += 1
@@ -149,6 +164,11 @@ function playerRuntime(code: string, initialVolume: number, autoplay: boolean, p
       if (audio) applyVolume()
     }
     if (event.data.action === 'pause') stop()
+    if (event.data.action === 'spatial' && typeof event.data.gain === 'number' && Number.isFinite(event.data.gain) && typeof event.data.pan === 'number' && Number.isFinite(event.data.pan)) {
+      spatialGain = Math.max(0, Math.min(1, event.data.gain))
+      spatialPan = Math.max(-1, Math.min(1, event.data.pan))
+      applySpatial()
+    }
     if (event.data.action === 'play' && audio) void play()
     if (event.data.action === 'highlight') {
       highlighting = event.data.enabled === true
@@ -163,6 +183,7 @@ function playerRuntime(code: string, initialVolume: number, autoplay: boolean, p
     repl?.stop()
     if (analyser) spectrumSource?.disconnect(analyser)
     analyser?.disconnect()
+    panner?.disconnect()
     if (audio && audio.state !== 'closed') void audio.close().catch(() => {})
   })
   const initialize = async (): Promise<void> => {
@@ -252,6 +273,7 @@ export function createMusicPlayer(code: string, volume: number, autoplay: boolea
   return {
     frame,
     setVolume: (next: number) => control('volume', next),
+    setSpatial: (gain: number, pan: number) => frame.contentWindow?.postMessage({ type: 'signal-music-control', action: 'spatial', gain, pan }, '*'),
     setHighlighting: (enabled: boolean) => { highlighting = enabled; control('highlight', undefined, enabled); updateDrawing() },
     setVisualizing: (enabled: boolean) => { visualizing = enabled; updateDrawing() },
     play: () => control('play'),

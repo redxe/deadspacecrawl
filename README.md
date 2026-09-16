@@ -84,16 +84,22 @@ Music regression checks: `node --test tests/music-library.test.mjs tests/music-p
 
 ## Add a Puzzle
 
+Open `http://localhost:5173/?admin` while `npm run dev` is running for the local puzzle editor. Create from templates, edit existing puzzles, reorder blocks and prerequisites, save drafts, preview gameplay, and publish to `src/puzzles/catalog.json`. Deploy the site afterward to update the live website. The editor and write API are not available in production.
+
+See [docs/puzzle-authoring.md](docs/puzzle-authoring.md) for the authoring workflow, preset limitations, conflict handling and the typed custom-block extension contract.
+
 The second archive puzzle is **A Light Between Pairs**, a three-stage glyph-based Playfair cipher unlocked after **A Door in the Dark**. Its draggable square, pair worksheet, teaching resources, saved work, and validation conventions are documented in [docs/playfair-puzzle.md](docs/playfair-puzzle.md).
 
 The third is **Across the Quantum Relay**, a measurement-free three-qubit circuit puzzle with draggable gates and controls, complex amplitude previews, universal state-transfer verification, and an AES-encrypted glyph transmission. Circuit conventions, the `jsqubits` simulator, AES format, persistence, and tests are documented in [docs/quantum-puzzle.md](docs/quantum-puzzle.md). Both interactive puzzles use live red/green glyph feedback.
 
 The fourth is **What the Phases Remember**: decode an eight-qubit statevector with an inverse QFT, enter the recovered word using glyphs, pack its indices into an integer, and use the largest prime factor to decipher an RSA transmission. Tools, bit ordering, and authoring values are documented in [docs/fourier-puzzle.md](docs/fourier-puzzle.md).
 
+The fifth is **An Echo in Five**, a glyph Wordle with unlimited retry rounds and a surprise, revisitable 3D gallery. Walking controls, local photo authoring, seeded scenery and spatial music are documented in [docs/mansion-gallery.md](docs/mansion-gallery.md) (spoilers).
+
 The top-right **Secret Messages** collection is separate from puzzle solutions. Its local-only editor supports viewing, adding, editing, and deleting messages with glyph previews. Start it with `node .local-tools/server.mjs --port 4181`; publish only `public/secret-messages.enc.json`. The editor and encrypted backups are Git-ignored. See [docs/secret-messages.md](docs/secret-messages.md) for the workflow and the public-key obfuscation caveat.
 
 1. Add one TypeScript file under `src/puzzles/` that default-exports a `Puzzle`.
-2. Import it in `src/main.ts` and append it to `archivePuzzles` in prerequisite order. Replace the corresponding future placeholder in the path. `src/puzzles/active.ts` still identifies the first archive puzzle; changing it replaces that first puzzle rather than adding a stage.
+2. Import it in `src/puzzles/builtins.ts` and append it to `builtinPuzzles` in prerequisite order. The editor can override this order. `src/puzzles/active.ts` still identifies the default first archive puzzle. Catalog overrides take precedence over code-authored defaults; restore a source definition in the editor to remove its override.
 
 Example puzzle:
 

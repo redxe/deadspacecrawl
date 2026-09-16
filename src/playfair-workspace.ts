@@ -6,7 +6,7 @@ import './playfair.css'
 
 const storageKey = 'signal-archive.playfair-work.v1'
 
-export function initializePlayfairWorkspace(atlas: Promise<GlyphAtlas>, onReady: (ready: boolean) => void) {
+export function initializePlayfairWorkspace(atlas: Promise<GlyphAtlas>, onReady: (ready: boolean) => void, persistenceKey: string | null = storageKey) {
   const element = document.createElement('section')
   element.className = 'playfair-workspace'
   element.setAttribute('aria-label', 'Playfair workbench')
@@ -23,7 +23,7 @@ export function initializePlayfairWorkspace(atlas: Promise<GlyphAtlas>, onReady:
   const restoredLetters = [...expectedPairs].map((letter, index) => letter === 'X' && expectedPairs[index - 1] === expectedPairs[index + 1] ? '' : letter)
   restoredLetters.push('?')
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null')
+    const saved = JSON.parse((persistenceKey ? localStorage.getItem(persistenceKey) : null) ?? 'null')
     if (Array.isArray(saved?.square) && saved.square.length === 25 && [...saved.square].sort().join('') === playfairAlphabet) square = saved.square
     if (Array.isArray(saved?.answers) && saved.answers.length === 36 && saved.answers.every((value: unknown) => typeof value === 'string' && (value === '' || playfairAlphabet.includes(value) && value.length === 1))) answers = saved.answers
     squareVerified = saved?.squareVerified === true && playfairSquareMatches(square)
@@ -93,7 +93,7 @@ export function initializePlayfairWorkspace(atlas: Promise<GlyphAtlas>, onReady:
 
   function pairAnswers() { return Array.from({ length: 18 }, (_, index) => answers.slice(index * 2, index * 2 + 2).join('')) }
   function persist() {
-    try { localStorage.setItem(storageKey, JSON.stringify({ square, answers, squareVerified, pairsVerified })) } catch {}
+    try { if (persistenceKey) localStorage.setItem(persistenceKey, JSON.stringify({ square, answers, squareVerified, pairsVerified })) } catch {}
   }
   function drawGlyph(target: HTMLElement, letter: string) {
     target.replaceChildren()

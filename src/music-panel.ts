@@ -22,6 +22,7 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
   let timeout: ReturnType<typeof setTimeout> | undefined
   let previousVolume = state.volume || 0.25
   let playingCode = ''
+  let spatial: { gain: number; pan: number } | null = null
   const muteListeners = new Set<(muted: boolean) => void>()
 
   const button = (label: string, icon: IconNode): HTMLButtonElement => {
@@ -80,7 +81,7 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
     player?.setHighlighting(dialog.open && editor.open && !document.hidden && codeInput.value === playingCode)
   }
   const updateVisualization = (): void => {
-    const enabled = !document.hidden && !motion.matches && state.volume > 0
+    const enabled = !spatial && !document.hidden && !motion.matches && state.volume > 0
     player?.setVisualizing(enabled)
     if (!enabled) visualizer.update(null)
   }
@@ -103,7 +104,8 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
     mute.setAttribute('aria-label', label)
     mute.setAttribute('aria-pressed', String(state.volume === 0))
     mute.replaceChildren(createElement(state.volume ? Volume2 : VolumeX))
-    player?.setVolume(state.volume)
+    player?.setVolume(spatial && state.volume > 0 ? 1 : state.volume)
+    if (spatial) player?.setSpatial(spatial.gain, spatial.pan)
     updateVisualization()
     muteListeners.forEach(listener => listener(state.volume === 0))
   }
@@ -197,7 +199,7 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
   dialog.addEventListener('close', () => { updateHighlighting(); scoreEditor.setPlayback(playingCode, []); trigger.focus() })
   editor.addEventListener('toggle', updateHighlighting)
   codeInput.addEventListener('input', updateHighlighting)
-  volumeInput.addEventListener('input', () => { state.volume = Number(volumeInput.value) / 100; updateVolume() })
+  volumeInput.addEventListener('input', () => { if (spatial) return; state.volume = Number(volumeInput.value) / 100; updateVolume() })
   volumeInput.addEventListener('change', persist)
   mute.addEventListener('click', toggleMute)
   retry.addEventListener('click', () => mountPlayer())
@@ -240,9 +242,9 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
     updateHighlighting()
     updateVisualization()
     if (document.hidden) {
-      resumeOnVisible = status === 'playing' || (status === 'loading' && state.enabled)
+      resumeOnVisible = status === 'playing' || (status === 'loading' && (state.enabled || !!spatial))
       player?.pause()
-    } else if (resumeOnVisible && state.enabled) player?.play()
+    } else if (resumeOnVisible && (state.enabled || spatial)) player?.play()
   }
   document.addEventListener('visibilitychange', visibility)
   const unlock = (): void => {
@@ -267,5 +269,15 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
     dialog.remove()
   }
   window.addEventListener('pagehide', event => { if (!event.persisted) destroy() })
-  return { unlock, destroy, toggleMute, subscribeMute }
+  const setSpatial = (next: { gain: number; pan: number } | null): void => {
+    const changingMode = !!next !== !!spatial
+    spatial = next
+    volumeInput.disabled = !!next
+    if (changingMode) {
+      player?.setVolume(next && state.volume > 0 ? 1 : state.volume)
+      updateVisualization()
+    }
+    player?.setSpatial(next?.gain ?? 1, next?.pan ?? 0)
+  }
+  return { unlock, destroy, toggleMute, subscribeMute, setSpatial, resume: () => { if (status !== 'playing' && status !== 'loading') player?.play() }, get muted() { return state.volume === 0 } }
 }

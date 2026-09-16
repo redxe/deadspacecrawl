@@ -1,6 +1,7 @@
 export type PuzzleKind = 'cipher' | 'logic' | 'math'
 
 export type PuzzleBlock =
+  | { type: 'custom'; plugin: string; config: Record<string, string | number | boolean> }
   | { type: 'fourier' }
   | { type: 'quantum' }
   | { type: 'playfair' }

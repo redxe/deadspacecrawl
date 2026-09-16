@@ -235,3 +235,17 @@ test('the host drives offscreen-frame highlights at 30fps, filters ranges, and c
   assert.equal(received.at(-1).length, 0)
   assert.equal(events.has('message'), false)
 })
+
+test('spatial volume is source checked, bounded and restored independently of user volume', async () => {
+  const player = setup(false, .5)
+  await flush()
+  const send = (source, gain, pan) => player.events.get('message')({ source, data: { type: 'signal-music-control', action: 'spatial', gain, pan } })
+  send({}, .1, 0)
+  assert.equal(player.gain, .3)
+  send(player.parent, .2, .5)
+  assert.ok(Math.abs(player.gain - .06) < 1e-8)
+  send(player.parent, NaN, 0)
+  assert.ok(Math.abs(player.gain - .06) < 1e-8)
+  send(player.parent, 1, 0)
+  assert.equal(player.gain, .3)
+})

@@ -1,0 +1,29 @@
+.mansion-open { overflow: hidden; }
+.mansion-open #app { visibility: hidden; }
+.mansion-world { position: fixed; inset: 0; z-index: 20000; background: #0c1011; color: #f0f1e9; font-family: 'Rajdhani', sans-serif; touch-action: none; }
+.mansion-canvas { width: 100%; height: 100%; display: block; outline: none; cursor: grab; }
+.mansion-canvas:active { cursor: grabbing; }
+.mansion-hud { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 14px; padding: 24px; pointer-events: none; background: linear-gradient(#111b2166, transparent); }
+.mansion-location { text-shadow: 0 1px 5px #0009; }
+.mansion-location span { display: block; font: 12px 'Share Tech Mono', monospace; }
+.mansion-location strong { display: block; font-size: 25px; font-weight: 500; }
+.mansion-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; pointer-events: auto; }
+.mansion-button { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid #d9e2dc80; border-radius: 4px; background: #152c32b3; backdrop-filter: blur(8px); color: #eef4f2; cursor: pointer; touch-action: none; }
+.mansion-button svg { width: 19px; height: 19px; }
+.mansion-button:hover { background: #274b51ed; }
+.mansion-button[aria-pressed=true] { border-color: #c0efdf; background: #24534ae6; }
+.mansion-button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.mansion-reticle { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #fff9; box-shadow: 0 0 2px #000; pointer-events: none; }
+.mansion-world--editing .mansion-reticle { display: none; }
+.mansion-world--editing .mansion-canvas { cursor: crosshair; }
+.mansion-status { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 220px); padding: 8px 14px; margin: 0; background: #13262bed; color: #fff3d4; font-size: 16px; border-radius: 3px; text-align: center; overflow-wrap: anywhere; }
+.mansion-status:empty { display: none; }
+.mansion-touch { position: absolute; right: 24px; bottom: 24px; display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(2, 44px); gap: 5px; }
+.mansion-touch [data-direction=ArrowUp] { grid-column: 2; }
+.mansion-touch [data-direction=ArrowLeft] { grid-column: 1; grid-row: 2; }
+.mansion-touch [data-direction=ArrowDown] { grid-column: 2; grid-row: 2; }
+.mansion-touch [data-direction=ArrowRight] { grid-column: 3; grid-row: 2; }
+.mansion-transition { position: absolute; inset: 0; pointer-events: none; background: #e9f4ed; opacity: 0; transition: opacity 1.8s ease-out; }
+.mansion-world--entering .mansion-transition { opacity: 1; }
+@media (max-width: 700px) { .mansion-hud { padding: 14px; } .mansion-location strong { font-size: 20px; } .mansion-actions { max-width: 235px; gap: 5px; } .mansion-button { width: 38px; height: 38px; } .mansion-touch { right: 14px; bottom: 18px; grid-template-columns: repeat(3, 44px); } .mansion-touch .mansion-button { width: 44px; height: 44px; } .mansion-status { left: 14px; bottom: 124px; transform: none; max-width: calc(100% - 28px); } }
+@media (prefers-reduced-motion: reduce) { .mansion-transition { transition: none; } }

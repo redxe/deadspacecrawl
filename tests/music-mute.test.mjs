@@ -26,7 +26,10 @@ class Element {
     return this.selectors.get(selector)
   }
   setAttribute(key, value) { this.attributes.set(key, value) }
-  addEventListener(name, callback) { this.events.set(name, callback) }
+  addEventListener(name, callback) {
+    const previous = this.events.get(name)
+    this.events.set(name, previous ? event => { previous(event); callback(event) } : callback)
+  }
   removeEventListener(name) { this.events.delete(name) }
   click() { this.events.get('click')?.() }
   remove() { this.removed = true }
@@ -52,7 +55,7 @@ function setup(volume = .42, unlocked = true) {
     './music-editor': { initializeMusicEditor: () => ({ refresh() {}, setPlayback() {}, destroy() {} }) },
     './music-visualizer': { initializeMusicVisualizer: () => ({ update() {}, destroy() {} }) },
     './music-player': { createMusicPlayer: (code, initialVolume, autoplay, onState) => {
-      const player = { frame: new Element(), code, initialVolume, autoplay, volumes: [], onState, setVolume(next) { this.volumes.push(next) }, setHighlighting() {}, setVisualizing() {}, destroy() { this.destroyed = true } }
+      const player = { frame: new Element(), code, initialVolume, autoplay, volumes: [], spatial: [], plays: 0, pauses: 0, onState, play() { this.plays++ }, pause() { this.pauses++ }, setSpatial(gain, pan) { this.spatial.push({ gain, pan }) }, setVolume(next) { this.volumes.push(next) }, setHighlighting() {}, setVisualizing() {}, destroy() { this.destroyed = true } }
       players.push(player)
       return player
     } },
@@ -67,7 +70,7 @@ function setup(volume = .42, unlocked = true) {
   const topMute = app.querySelector('.system-actions').children.at(-1)
   const panelMute = dialog.querySelector('.music-volume').children[0]
   const slider = dialog.querySelector('#music-volume')
-  return { state, players, saved, music, typing, dialog, topMute, panelMute, slider }
+  return { state, players, saved, music, typing, dialog, topMute, panelMute, slider, document }
 }
 
 test('top-right mute changes the active player and restores volume without replacing or pausing it', () => {
@@ -130,4 +133,44 @@ test('mute applies on engine readiness and follows track switches and persisted 
   assert.equal(restored.players[0].initialVolume, 0)
   restored.topMute.click()
   assert.equal(restored.players[0].volumes.at(-1), .25)
+})
+
+test('gallery distance locks volume, respects mute and restores the original level on exit', () => {
+  const view = setup()
+  const player = view.players[0]
+  player.onState({ status: 'ready' })
+  view.music.setSpatial({ gain: .2, pan: -.8 })
+  assert.equal(view.slider.disabled, true)
+  assert.equal(player.volumes.at(-1), 1)
+  assert.equal(view.state.volume, .42)
+  assert.deepEqual(player.spatial.at(-1), { gain: .2, pan: -.8 })
+  view.music.toggleMute()
+  assert.equal(player.volumes.at(-1), 0)
+  view.music.toggleMute()
+  assert.equal(player.volumes.at(-1), 1)
+  view.music.setSpatial(null)
+  assert.equal(view.slider.disabled, false)
+  assert.equal(player.volumes.at(-1), .42)
+  assert.deepEqual(player.spatial.at(-1), { gain: 1, pan: 0 })
+})
+
+test('gallery playback resumes after hiding without rewriting the normal playback preference', () => {
+  const view = setup()
+  const player = view.players[0]
+  view.state.enabled = false
+  player.onState({ status: 'paused' })
+  view.music.setSpatial({ gain: .1, pan: 0 })
+  view.music.resume()
+  assert.equal(player.plays, 1)
+  player.onState({ status: 'playing' })
+  view.music.resume()
+  assert.equal(player.plays, 1, 'Repeated walking gestures must not restart the song')
+  view.document.hidden = true
+  view.document.events.get('visibilitychange')()
+  assert.equal(player.pauses, 1)
+  player.onState({ status: 'paused' })
+  view.document.hidden = false
+  view.document.events.get('visibilitychange')()
+  assert.equal(player.plays, 2)
+  assert.equal(view.state.enabled, false)
 })

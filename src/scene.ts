@@ -194,6 +194,10 @@ export function initializeScene(canvas: HTMLCanvasElement): SceneController {
 
   const clock = new THREE.Clock()
   const render = (): void => {
+    if (document.hidden || canvas.closest('[inert]')) {
+      frame = window.requestAnimationFrame(render)
+      return
+    }
     const elapsed = clock.getElapsedTime()
     const interpolation = reducedMotion.matches ? 1 : 0.028
     currentX = THREE.MathUtils.lerp(currentX, targetX, interpolation)

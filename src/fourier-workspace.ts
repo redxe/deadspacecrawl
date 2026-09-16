@@ -7,7 +7,7 @@ import './fourier.css'
 
 export const fourierStorageKey = 'signal-archive.fourier-work.v1'
 
-export function initializeFourierWorkspace(atlasPromise: Promise<GlyphAtlas>, onReady: (ready: boolean) => void) {
+export function initializeFourierWorkspace(atlasPromise: Promise<GlyphAtlas>, onReady: (ready: boolean) => void, persistenceKey: string | null = fourierStorageKey) {
   const element = document.createElement('section')
   element.className = 'fourier-workspace'
   element.setAttribute('aria-label', 'Fourier and RSA workbench')
@@ -22,7 +22,7 @@ export function initializeFourierWorkspace(atlasPromise: Promise<GlyphAtlas>, on
   let restoreDecryption = false
   let vector = receivedStatevector()
   try {
-    const saved = JSON.parse(localStorage.getItem(fourierStorageKey) ?? 'null')
+    const saved = JSON.parse((persistenceKey ? localStorage.getItem(persistenceKey) : null) ?? 'null')
     if (Array.isArray(saved?.selected) && saved.selected.length === 6 && saved.selected.every((index: unknown) => Number.isInteger(index) && Number(index) >= -1 && Number(index) < 26)) selected = saved.selected
     glyphsVerified = saved?.verified === true && matchesSignal(selected)
     if (glyphsVerified && typeof saved?.prime === 'string' && typeof saved?.exponent === 'string') {
@@ -62,7 +62,7 @@ export function initializeFourierWorkspace(atlasPromise: Promise<GlyphAtlas>, on
   exponentInput.value = exponent
   for (const [selector, icon] of [['[data-download]', Download], ['[data-vector-reset]', RotateCcw], ['[data-erase]', Delete], ['[data-check-glyphs]', Check], ['[data-factor]', Calculator], ['[data-derive]', KeyRound], ['[data-decrypt-rsa]', LockKeyhole]] as const) find(selector).prepend(createElement(icon))
   const persist = () => {
-    try { localStorage.setItem(fourierStorageKey, JSON.stringify({ selected, verified: glyphsVerified, prime: primeInput.value, exponent: exponentInput.value, decrypted: !!plaintext })) } catch {}
+    try { if (persistenceKey) localStorage.setItem(persistenceKey, JSON.stringify({ selected, verified: glyphsVerified, prime: primeInput.value, exponent: exponentInput.value, decrypted: !!plaintext })) } catch {}
   }
   function clearDecryption() { plaintext = ''; message.replaceChildren(); find('[data-rsa-status]').textContent = ''; onReady(false) }
   function lockDownstream() {
