@@ -24,7 +24,11 @@ export interface PuzzleExtensionContext {
     resume: () => void
     muted: () => boolean
     toggleMute: () => void
-    spectrum?: () => { bands: readonly number[] } | null
+    spectrum?: () => { bands: readonly number[]; waveform?: readonly number[] } | null
+    unlockRobin?: () => void
+    playRobin?: () => void
+    stopRobin?: () => void
+    robinPlayback?: () => { status: string; cycle: number; cue?: import('../music-player').MusicCue | null } | null
   }
 }
 

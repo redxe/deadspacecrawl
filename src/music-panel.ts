@@ -1,9 +1,9 @@
 import { Music2, Plus, Save, Trash2, X, Volume2, VolumeX, RotateCcw, Play, createElement } from 'lucide'
 import type { IconNode } from 'lucide'
-import { builtInSongs, loadMusicState, saveMusicState, validateSong } from './music-library'
+import { availableSongs, builtInSongs, loadMusicState, saveMusicState, validateSong, robinSong, unlockRobinSong } from './music-library'
 import type { Song } from './music-library'
 import { createMusicPlayer } from './music-player'
-import type { MusicStatus, MusicSpectrum } from './music-player'
+import type { MusicStatus, MusicSpectrum, MusicCue } from './music-player'
 import { initializeMusicEditor } from './music-editor'
 import { initializeMusicVisualizer } from './music-visualizer'
 import './music.css'
@@ -24,6 +24,9 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
   let playingCode = ''
   let spatial: { gain: number; pan: number } | null = null
   let spectrum: MusicSpectrum | null = null
+  let previewRobin = false
+  let playerVersion = 0
+  let performance: { selected: string; enabled: boolean; cycle: number; cue: MusicCue | null } | undefined
   const muteListeners = new Set<(muted: boolean) => void>()
 
   const button = (label: string, icon: IconNode): HTMLButtonElement => {
@@ -76,7 +79,10 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
   actions.append(add, preview, save, remove)
   dialog.querySelector('.music-volume')!.append(mute, retry)
 
-  const songs = (): readonly Song[] => [...builtInSongs, ...state.songs]
+  const songs = (): readonly Song[] => {
+    const library = availableSongs()
+    return [...library, ...(previewRobin && !library.some(song => song.id === robinSong.id) ? [robinSong] : []), ...state.songs]
+  }
   const selected = (): Song => songs().find(song => song.id === state.selected) ?? builtInSongs[0]!
   const updateHighlighting = (): void => {
     player?.setHighlighting(dialog.open && editor.open && !document.hidden && codeInput.value === playingCode)
@@ -93,7 +99,7 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
     feedback.classList.toggle('music-status--error', error)
   }
   const persist = (): boolean => {
-    const saved = saveMusicState(state)
+    const saved = saveMusicState(performance ? { ...state, selected: performance.selected, enabled: performance.enabled } : state)
     if (!saved) notify('Browser storage is unavailable or full. Changes last only for this page.', true)
     return saved
   }
@@ -136,14 +142,20 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
   const canDiscard = (): boolean => (nameInput.value === originalName && codeInput.value === originalCode) || window.confirm('Discard unsaved song edits?')
   const mountPlayer = (code = selected().code, autoplay = state.enabled): void => {
     if (!unlocked) return
+    if (performance) { code = robinSong.code; autoplay = true; performance.cue = null }
+    const owner = ++playerVersion
     clearTimeout(timeout)
+    player?.setVolume(0)
+    player?.pause()
     player?.destroy()
+    spectrum = null
     playingCode = code
     scoreEditor.setPlayback(code, [])
     status = 'loading'
     trigger.dataset.playing = 'false'
     notify('Loading Strudel...')
-    player = createMusicPlayer(code, state.volume, autoplay && !document.hidden, next => {
+    player = createMusicPlayer(code, spatial && state.volume > 0 ? 1 : state.volume, autoplay && !document.hidden, next => {
+      if (owner !== playerVersion) return
       status = next.status
       if (status !== 'loading') clearTimeout(timeout)
       if (status === 'ready') updateVolume()
@@ -157,15 +169,15 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
       }
       const messages: Record<MusicStatus, string> = {
         loading: 'Loading Strudel...', ready: 'Ready', playing: selected().name,
-        paused: 'Paused', gesture: 'Audio permission required. Press Play.', error: 'Unable to play this score.',
+        paused: 'Paused', gesture: 'Audio permission required. Press Play.', error: 'Unable to play this score.', ended: 'Finished',
       }
       notify(next.detail ?? messages[status], status === 'error')
       if (next.manual) persist()
-    }, ranges => scoreEditor.setPlayback(code, ranges), next => { spectrum = next; if (!spatial) visualizer.update(next) })
+    }, ranges => { if (owner === playerVersion) scoreEditor.setPlayback(code, ranges) }, next => { if (owner !== playerVersion) return; spectrum = next; if (!spatial) visualizer.update(next) }, performance ? { cycles: 56, onProgress: cycle => { if (owner === playerVersion && performance) performance.cycle = cycle }, onCue: cue => { if (owner === playerVersion && performance) performance.cue = cue } } : undefined)
     updateVisualization()
     host.replaceChildren(player.frame)
     timeout = setTimeout(() => {
-      if (status === 'loading') { player?.destroy(); notify('The music engine did not respond. Restart the player to retry.', true) }
+      if (status === 'loading') { status = 'error'; player?.destroy(); notify('The music engine did not respond. Restart the player to retry.', true) }
     }, 15000)
   }
   const renderSongs = (): void => {
@@ -260,6 +272,7 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
   updateVolume()
   if (initiallyUnlocked) unlock()
   const destroy = (): void => {
+    playerVersion++
     clearTimeout(timeout)
     player?.destroy()
     scoreEditor.destroy()
@@ -281,5 +294,31 @@ export function initializeMusic(app: HTMLElement, initiallyUnlocked: boolean) {
     }
     player?.setSpatial(next?.gain ?? 1, next?.pan ?? 0)
   }
-  return { unlock, destroy, toggleMute, subscribeMute, setSpatial, getSpectrum: () => status === 'playing' && state.volume > 0 && !document.hidden ? spectrum : null, resume: () => { if (status !== 'playing' && status !== 'loading') player?.play() }, get muted() { return state.volume === 0 } }
+  const unlockRobin = (preview = false): void => {
+    if (preview) previewRobin = true
+    const saved = preview || unlockRobinSong()
+    renderSongs()
+    notify(saved ? 'Robin unlocked.' : 'Robin unlocked for this page. Browser storage is unavailable.', !saved)
+    const note = createElement(Music2)
+    note.setAttribute('aria-hidden', 'true')
+    note.setAttribute('width', '16'); note.setAttribute('height', '16')
+    note.style.verticalAlign = 'text-bottom'; note.style.marginInlineEnd = '.5em'
+    feedback.prepend(note)
+  }
+  const playRobin = (): void => {
+    performance ??= { selected: state.selected, enabled: state.enabled, cycle: 0, cue: null }
+    performance.cycle = 0
+    state.selected = robinSong.id
+    renderSongs()
+    mountPlayer(robinSong.code, true)
+  }
+  const stopRobin = (): void => {
+    if (!performance) return
+    state.selected = performance.selected
+    state.enabled = performance.enabled
+    performance = undefined
+    renderSongs()
+    mountPlayer()
+  }
+  return { unlock, unlockRobin, playRobin, stopRobin, getRobinPlayback: () => performance ? { status, cycle: performance.cycle, cue: status === 'playing' && state.volume > 0 && !document.hidden ? performance.cue : null } : null, destroy, toggleMute, subscribeMute, setSpatial, getSpectrum: () => status === 'playing' && state.volume > 0 && !document.hidden ? spectrum : null, resume: () => { if (status !== 'playing' && status !== 'loading' && !(performance && status === 'ended')) player?.play() }, get muted() { return state.volume === 0 } }
 }

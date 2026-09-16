@@ -180,6 +180,84 @@ export interface MusicState {
 
 export const musicStorageKey = 'signal-archive.music.v1'
 
+export const robinSong: Song = {
+  id: 'robin', name: 'Robin', detail: '104 BPM / soft electronic nocturne',
+  code: `setcps(104/240)
+const lyrics = {
+  verse1: [
+    'A door swung wide and there you were',
+    'My heart forgot its lock and key',
+    'You held my shaking hands in yours',
+    'And made a little room for me'
+  ],
+  verse2: [
+    'The road was dark beneath my wheels',
+    'You stayed until the sky was blue',
+    'No shining armor just your arms',
+    'I found my ferry tale in you'
+  ],
+  chorus: [
+    'Robin you keep robbing my heart',
+    'And I keep leaving you the key',
+    'No cage just somewhere soft to land',
+    'A little nest for you and me'
+  ],
+  bridge: ['The early bird can have the view', 'I only want to wake with you']
+}
+const pronunciation = { robin: 'R AA1 B IH0 N', robbing: 'R AA1 B IH0 N' }
+const mix = { lead:.54, harmony:.08, sub:.16, bass:.115, pad:.045, arp:.055, kick:.2, snare:.055, hat:.012, bell:.045 }
+const tune = {
+  verse: [[67,69,71,74,71,69,67,71], [67,69,72,74,76,74,72,72], [69,72,74,77,76,72,69,69], [69,71,72,76,74,72,71,69]],
+  chorus: [[74,71,74,76,79,76,74,71], [72,74,76,79,76,74,72,72], [72,74,77,76,74,72,69,69], [72,71,69,72,76,74,72,69]],
+  harmony: [[71,67,71,72,74,72,71,67], [67,69,72,76,72,69,67,67], [69,69,72,72,69,69,65,65], [69,67,64,69,72,71,69,64]]
+}
+const sing = (words, melody, gain=mix.lead) => robinVoice(words, melody, { barsPerLine:2, pronunciation, formant:1.04 }).gain(gain).pan(.5).room(.12).roomsize(2)
+const chords = [[55,59,62,67], [55,60,64,67], [53,57,60,65], [57,60,64,69]]
+const roots = [43,36,41,45]
+const fifths = [50,43,48,52]
+const chord = index => stack(...chords[index % 4].map(pitch=>note(pitch)))
+const band = (bars, fullness=1, tonic=false, supporting=false) => slowcat(...Array.from({length:bars}, (_, bar) => {
+  const harmony = tonic ? 0 : Math.floor(bar / 2) % 4
+  const pitches = chords[harmony]
+  const bed = (supporting ? .8 : 1) * (.8 + .2*fullness)
+  return stack(
+    note(roots[harmony]-12).struct("x ~ ~ x ~ ~ x ~").s("sine").attack(.018).decay(.18).sustain(.3).release(.1).gain(mix.sub*bed).pan(.5),
+    note(fastcat(roots[harmony],roots[harmony],fifths[harmony],roots[harmony])).struct("x ~ x [~ x] x ~ x ~").s("sawtooth").attack(.018).decay(.12).sustain(.35).release(.06).lpf(sine.range(150,850).fast(bar%2 ? 4 : 2)).hpf(65).gain(sine.range(.4,1).fast(4).mul(mix.bass*bed)).pan(.5).withValue(value=>({...value,robinBeat:'bass'})),
+    chord(harmony).struct("x ~ x ~").s("triangle").attack(.16).decay(.18).sustain(.32).release(.4).lpf(1200).hpf(180).gain(mix.pad*bed).pan(.28).room(.2),
+    note(fastcat(...[0,2,1,2,3,2,1,2].map(index=>pitches[index]+12))).s("sine").attack(.008).decay(.08).sustain(.02).release(.08).hpf(380).lpf(2400).gain(mix.arp*fullness*bed).pan(.72).delay(.16).room(.12),
+    note(fullness>.8 ? "36 ~ ~ 36 ~ ~ 36 ~" : "36*4").s("sine").attack(.004).decay(.1).sustain(0).release(.05).gain(mix.kick*bed).pan(.5).withValue(value=>({...value,robinBeat:'kick'})),
+    s("~ ~ pink ~").attack(.009).decay(.11).sustain(0).release(.06).hpf(1300).lpf(4300).gain(mix.snare*bed).pan(.52).room(.1).withValue(value=>({...value,robinBeat:'snare'})),
+    s("white*8").attack(.004).decay(.018).sustain(0).release(.012).hpf(7000).lpf(10000).gain(fastcat(...[1,.65,.85,.65].map(level=>level*mix.hat*bed))).pan(.62),
+    note(fastcat(pitches[3]+12,pitches[2]+12)).struct(bar%2 ? "~ ~ ~ ~ ~ ~ ~ x" : "~").s("sine").attack(.1).release(.35).gain(mix.bell*fullness*bed).pan(.2).delay(.18).room(.18)
+  )
+})).swingBy(.02,8)
+const section = (words, melody, fullness=1, vocal=mix.lead) => stack(band(words.length*2,fullness,false,true),sing(words,melody,vocal))
+const instrumental = bars => band(bars,.85)
+arrange(
+  [4,instrumental(4)],
+  [8,section(lyrics.verse1,tune.verse,.65)],
+  [8,section(lyrics.chorus,tune.chorus,1)],
+  [4,instrumental(4)],
+  [8,section(lyrics.verse2,tune.verse,.75)],
+  [8,section(lyrics.chorus,tune.chorus,1)],
+  [4,section(lyrics.bridge,tune.verse,.35,mix.lead*.92)],
+  [8,stack(section(lyrics.chorus,tune.chorus,1.05),sing(lyrics.chorus,tune.harmony,mix.harmony).pan(.62))],
+  [4,stack(band(4,.4,true),note("<79 74 71 67>").s("sine").attack(.1).release(.8).gain(.065).room(.22))]
+)`,
+}
+const robinStorageKey = 'signal-archive.robin-unlocked.v1'
+let robinUnlocked = false
+
+export function availableSongs(): readonly Song[] {
+  try { robinUnlocked ||= localStorage.getItem(robinStorageKey) === 'true' } catch {}
+  return robinUnlocked ? [...builtInSongs, robinSong] : builtInSongs
+}
+
+export function unlockRobinSong(): boolean {
+  robinUnlocked = true
+  try { localStorage.setItem(robinStorageKey, 'true'); return true } catch { return false }
+}
+
 export function validateSong(name: string, code: string): string | undefined {
   if (!name.trim() || name.trim().length > 80) return 'Use a song name between 1 and 80 characters.'
   if (!code.trim() || code.length > 20000) return 'Use between 1 and 20,000 characters of Strudel code.'
@@ -190,7 +268,7 @@ export function loadMusicState(): MusicState {
   try {
     const value = JSON.parse(localStorage.getItem(musicStorageKey) ?? 'null')
     if (!value || typeof value !== 'object') return defaults
-    const ids = new Set(builtInSongs.map(song => song.id))
+    const ids = new Set(availableSongs().map(song => song.id))
     const songs: Song[] = []
     if (Array.isArray(value.songs)) {
       for (const song of value.songs.slice(0, 30)) {

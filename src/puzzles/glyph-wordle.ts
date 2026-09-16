@@ -96,7 +96,7 @@ export function initializeGlyphWordle(element: HTMLElement, context: PuzzleExten
       world = module.openMansion(audio, () => { world = undefined; status.textContent = 'Signal retained.'; revisit.focus() }, introduced ? undefined : { onComplete: () => {
         introduced = true
         if (!context.preview) { try { localStorage.setItem(introductionKey, 'complete') } catch {} }
-      } })
+      } }, atlas)
       status.textContent = 'Signal retained.'
     } catch { status.textContent = 'The gallery could not open. Check WebGL support, then retry.' }
     finally { opening = false; if (!disposed) render() }

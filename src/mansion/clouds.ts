@@ -9,11 +9,11 @@ export function createClouds(scene: THREE.Scene) {
   const tint = { value: new THREE.Color('#fff3de') }
   const material = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    uniforms: { cloudTime: time, cloudResponse: response, cloudTint: tint },
+    uniforms: { cloudTime: time, cloudResponse: response, cloudTint: tint, cloudNightFade: { value: 1 } },
     vertexShader: `varying vec2 cloudUV;
       void main() { cloudUV = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `varying vec2 cloudUV;
-      uniform float cloudTime; uniform float cloudResponse; uniform vec3 cloudTint;
+      uniform float cloudTime; uniform float cloudResponse; uniform vec3 cloudTint; uniform float cloudNightFade;
       float hash(vec2 point) { return fract(sin(dot(point, vec2(127.1,311.7))) * 43758.5453); }
       float noise(vec2 point) {
         vec2 cell = floor(point); vec2 blend = fract(point); blend = blend * blend * (3.0 - 2.0 * blend);
@@ -27,7 +27,7 @@ export function createClouds(scene: THREE.Scene) {
         float envelope = 1.0 - smoothstep(.3, 1.0, dot(outline, outline));
         float alpha = smoothstep(.25, .7, density + cloudResponse * .12) * envelope;
         vec3 color = cloudTint * (.72 + .28 * smoothstep(0.0, 1.0, cloudUV.y));
-        gl_FragColor = vec4(color, alpha * .87);
+        gl_FragColor = vec4(color, alpha * .87 * cloudNightFade);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import seedrandom from 'seedrandom'
 import { mansionSeed, hallLampDepths, ballroomLampDepths } from './layout'
-import { musicResponse } from './music-response'
+import { musicResponse, waveformResponse } from './music-response'
 import { createClouds } from './clouds'
 
 export function createEnvironment(scene: THREE.Scene, leaves: THREE.MeshStandardMaterial, sunlight: THREE.DirectionalLight) {
@@ -13,6 +13,10 @@ export function createEnvironment(scene: THREE.Scene, leaves: THREE.MeshStandard
   const bassUniform = { value: 0 }
   const melodyUniform = { value: 0 }
   const wallpaperTime = { value: 0 }
+  const show = { value: 0 }
+  const waveData = new Uint8Array(64 * 4).fill(128)
+  const waveTexture = new THREE.DataTexture(waveData, 64, 1, THREE.RGBAFormat)
+  waveTexture.magFilter = THREE.LinearFilter; waveTexture.minFilter = THREE.LinearFilter; waveTexture.needsUpdate = true; textures.push(waveTexture)
   const shades: THREE.MeshStandardMaterial[] = []
   const lampLights: THREE.PointLight[] = []
   const lampGlows: THREE.MeshBasicMaterial[] = []
@@ -23,15 +27,26 @@ export function createEnvironment(scene: THREE.Scene, leaves: THREE.MeshStandard
     material.onBeforeCompile = shader => {
       shader.uniforms.gardenTime = timeUniform
       shader.uniforms.gardenWind = windUniform
+      shader.uniforms.gardenShow = show
+      shader.uniforms.gardenMelody = melodyUniform
       shader.vertexShader = `uniform float gardenTime; uniform float gardenWind;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
         #ifdef USE_INSTANCING
           float gardenPhase = instanceMatrix[3].x * .31 + instanceMatrix[3].z * .19;
           transformed.x += sin(gardenTime * 1.2 + gardenPhase + position.y) * gardenWind * max(0.0, position.y + .35);
           transformed.z += cos(gardenTime * .8 + gardenPhase) * gardenWind * .4 * max(0.0, position.y + .35);
+        #else
+          transformed.x += sin(gardenTime * 1.2 + position.y) * gardenWind * max(0.0,position.y+.35);
         #endif`)
+      shader.fragmentShader = `uniform float gardenShow; uniform float gardenMelody;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += vec3(.32,.12,.58) * gardenShow * (.12 + gardenMelody*.35);`)
     }
   }
   wind(leaves)
+  const porchMaterials = new Set<THREE.MeshStandardMaterial>()
+  scene.getObjectByName('shared-entrance-porch')?.traverse(object => {
+    if (object instanceof THREE.Mesh && (object.name === 'porch-grass' || object.geometry.name === 'porch-tree-canopy') && object.material instanceof THREE.MeshStandardMaterial) porchMaterials.add(object.material)
+  })
+  porchMaterials.forEach(wind)
   const grassMaterial = new THREE.MeshStandardMaterial({ color: '#b5d991', roughness: 1, side: THREE.DoubleSide })
   wind(grassMaterial)
   const blade = new THREE.PlaneGeometry(.075, .65, 1, 3); blade.translate(0, .325, 0)
@@ -56,6 +71,7 @@ export function createEnvironment(scene: THREE.Scene, leaves: THREE.MeshStandard
   scene.add(grass)
   const sunMaterial = new THREE.MeshBasicMaterial({ color: '#fff2b6', fog: false })
   const sun = new THREE.Mesh(new THREE.SphereGeometry(3.8, 16, 12), sunMaterial)
+  sun.name = 'mansion-sun'
   sun.position.set(-75, 32, -21); scene.add(sun)
 
   const wallpaper = (floral: boolean) => {
@@ -90,16 +106,24 @@ export function createEnvironment(scene: THREE.Scene, leaves: THREE.MeshStandard
         shader.uniforms.wallpaperTime = wallpaperTime
         shader.uniforms.wallpaperBass = bassUniform
         shader.uniforms.wallpaperMelody = melodyUniform
-        shader.fragmentShader = `uniform float wallpaperTime; uniform float wallpaperBass; uniform float wallpaperMelody;\n${shader.fragmentShader}`.replace('#include <map_fragment>', `
+        shader.uniforms.wallpaperShow = show
+        shader.uniforms.wallpaperWave = { value: waveTexture }
+        shader.fragmentShader = `uniform float wallpaperTime; uniform float wallpaperBass; uniform float wallpaperMelody; uniform float wallpaperShow; uniform sampler2D wallpaperWave;\n${shader.fragmentShader}`.replace('#include <map_fragment>', `
           vec2 patternUV = vMapUv;
           float edgeMask = smoothstep(.12, .3, patternUV.y) * (1.0 - smoothstep(.7, .88, patternUV.y));
           patternUV.x += edgeMask * (sin(patternUV.x * 12.0 + wallpaperTime * ${floral ? '1.8' : '-2.2'} + ${index.toFixed(1)}) * wallpaperMelody * .075 + sin(wallpaperTime * 2.7) * wallpaperBass * .045);
           patternUV.y += edgeMask * sin(patternUV.x * 20.0 - wallpaperTime * 2.4) * wallpaperBass * .11;
           vec4 sampledDiffuseColor = texture2D(map, patternUV);
+          float soundWave = (texture2D(wallpaperWave,vec2(fract(vMapUv.x),.5)).r-.5)*.8;
+          float goldTrace = exp(-pow((vMapUv.y-.5-soundWave)*65.0,2.0));
+          float violetTrace = exp(-pow((vMapUv.y-.5+soundWave*.7)*40.0,2.0));
+          vec3 waveColor = vec3(.018,.007,.04) + vec3(1.0,.77,.3)*goldTrace + vec3(.5,.18,1.0)*violetTrace*.65;
+          sampledDiffuseColor = mix(sampledDiffuseColor,vec4(waveColor,1.0),wallpaperShow);
           diffuseColor *= sampledDiffuseColor;
         `).replace('#include <emissivemap_fragment>', `
           totalEmissiveRadiance *= texture2D(emissiveMap, patternUV).rgb;
           totalEmissiveRadiance *= 1.0 + .7 * wallpaperMelody * sin(patternUV.x * 12.0 - wallpaperTime * 3.0);
+          totalEmissiveRadiance = mix(totalEmissiveRadiance,waveColor*1.8,wallpaperShow);
         `)
       }
       material.customProgramCacheKey = () => `wallpaper-${floral}-${index}`
@@ -156,9 +180,17 @@ export function createEnvironment(scene: THREE.Scene, leaves: THREE.MeshStandard
   let previousTime = 0
   return {
     levels,
-    animate(time: number, motion: boolean, bands: readonly number[]) {
+    animate(time: number, motion: boolean, bands: readonly number[], performance = 0, waveform: readonly number[] = []) {
       const target = motion ? musicResponse(bands) : [0, 0, 0]
       const delta = Math.min(.1, previousTime ? time - previousTime : 0); previousTime = time
+      show.value += (performance - show.value) * (1 - Math.exp(-delta * 2))
+      const wave = waveformResponse(motion ? waveform : [])
+      for (let index = 0; index < 64; index++) {
+        const value = wave[index]!
+        waveData[index * 4] = Math.round((value * .5 + .5) * 255)
+        waveData[index * 4 + 3] = 255
+      }
+      waveTexture.needsUpdate = true
       accentLevel = motion ? Math.max(accentLevel * Math.exp(-delta * 4), Math.min(1, Math.max(0, target[0]! - previousBass) * 5)) : 0
       previousBass = target[0]!
       for (let index = 0; index < 3; index++) levels[index] += (target[index]! - levels[index]!) * (1 - Math.exp(-delta * (target[index]! > levels[index]! ? 7 : 3)))
@@ -166,7 +198,7 @@ export function createEnvironment(scene: THREE.Scene, leaves: THREE.MeshStandard
       bassUniform.value = levels[0]!
       melodyUniform.value = levels[1]!
       wallpaperTime.value += delta * (levels[0]! + levels[1]!) * 2
-      windUniform.value = motion ? .025 + levels[0]! * .16 + levels[1]! * .09 : 0
+      windUniform.value = motion ? .025 + levels[0]! * (.16 + show.value * .12) + levels[1]! * .09 : 0
       clouds.animate(delta, motion, levels[0]!, levels[1]!)
       sun.scale.setScalar(1 + levels[0]! * .09)
       sunMaterial.color.setHSL(.12 - levels[1]! * .035, .65, .82 + levels[2]! * .07)

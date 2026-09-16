@@ -1,12 +1,22 @@
 import * as THREE from 'three'
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Footprints, ImagePlus, Maximize, Minimize, MousePointer2, Volume2, VolumeX, X, createElement } from 'lucide'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Footprints, ImagePlus, Maximize, Minimize, MousePointer2, Music2, Play, RotateCcw, SkipBack, Volume2, VolumeX, X, createElement } from 'lucide'
 import type { IconNode } from 'lucide'
 import { createScenery } from './scenery'
 import { createFootsteps, footstepDistance } from './footsteps'
 import { createFairySequence } from './fairy'
+import { createRobinSequence } from './robin-state'
+import { createRobinNight } from './robin-night'
+import { createNightChimes } from './night-chimes'
+import { createRobinFountain } from './robin-fountain'
+import { createFountainResponse } from './fountain-response'
+import { createRobinKaraoke } from './robin-karaoke'
+import { loadGlyphAtlas } from '../glyphs'
+import type { GlyphAtlas } from '../glyphs'
+import type { MusicCue } from '../music-player'
 import { floorHeight, movePosition, spatialMusic } from './layout'
 import { loadGallery, openGalleryEditor, resizePicture } from './pictures'
+import { fitFramePicture } from './picture-fit'
 import type { Gallery } from './pictures'
 import './world.css'
 
@@ -15,10 +25,14 @@ export interface MansionAudio {
   resume: () => void
   muted: () => boolean
   toggleMute: () => void
-  spectrum?: () => { bands: readonly number[] } | null
+  spectrum?: () => { bands: readonly number[]; waveform?: readonly number[] } | null
+  unlockRobin?: () => void
+  playRobin?: () => void
+  stopRobin?: () => void
+  robinPlayback?: () => { status: string; cycle: number; cue?: MusicCue | null } | null
 }
 
-export function openMansion(audio: MansionAudio, onClose: () => void, introduction?: { onComplete: () => void }) {
+export function openMansion(audio: MansionAudio, onClose: () => void, introduction?: { onComplete: () => void }, glyphs?: GlyphAtlas) {
   const root = document.createElement('section')
   root.className = 'mansion-world mansion-world--entering'
   root.setAttribute('role', 'dialog')
@@ -71,6 +85,28 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
   scene.add(hemisphere)
   const sun = new THREE.DirectionalLight('#fff0d5', 2.6); sun.position.set(-24, 32, 15); scene.add(sun)
   const scenery = createScenery(scene, sun, renderer)
+  let robin = createRobinSequence()
+  const night = createRobinNight(scene, renderer, camera)
+  let chimes = createNightChimes()
+  const fountain = createRobinFountain(scene, renderer)
+  const response = createFountainResponse()
+  const karaoke = createRobinKaraoke(root)
+  void (glyphs ? Promise.resolve(glyphs) : loadGlyphAtlas(`${import.meta.env.BASE_URL}assets/characters.png`)).then(atlas => {
+    if (disposed) return
+    karaoke.setAtlas(atlas)
+    const source = atlas.get('R')
+    if (source) {
+      const texture = new THREE.TextureLoader().load(source, loaded => { if (disposed) loaded.dispose() })
+      fountain.setGlyph(texture)
+    }
+  }).catch(() => {})
+  let robinFrame = robin.update(0, position)
+  let songAwarded = false
+  let finished = false
+  const finale = document.createElement('nav')
+  finale.className = 'mansion-finale'; finale.hidden = true; finale.setAttribute('aria-label', 'Robin finale')
+  root.append(finale)
+  const finaleAnchor = new THREE.Vector3()
   const footsteps = createFootsteps()
   const controls = new PointerLockControls(camera, canvas)
   controls.minPolarAngle = .3
@@ -78,7 +114,16 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
   const raycaster = new THREE.Raycaster()
   const pointer = new THREE.Vector2()
   const orientation = new THREE.Euler(0, 0, 0, 'YXZ')
-  const notify = (message: string) => { status.textContent = message }
+  const notify = (message: string, icon?: IconNode) => {
+    status.textContent = message
+    if (icon) {
+      const note = createElement(icon)
+      note.setAttribute('aria-hidden', 'true')
+      note.setAttribute('width', '16'); note.setAttribute('height', '16')
+      note.style.verticalAlign = 'text-bottom'; note.style.marginInlineEnd = '.5em'
+      status.prepend(note)
+    }
+  }
   const button = (label: string, icon: IconNode, action: () => void): HTMLButtonElement => {
     const element = document.createElement('button')
     element.type = 'button'
@@ -103,11 +148,16 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
     controls.dispose()
     footsteps.destroy()
     fairy?.destroy()
+    chimes.destroy()
+    karaoke.destroy()
+    fountain.destroy()
+    night.destroy()
     scenery.destroy()
     loadedTextures.forEach(texture => texture.dispose())
     renderer.dispose()
     renderer.forceContextLoss()
     audio.setSpatial(null)
+    audio.stopRobin?.()
     app.inert = previousInert
     document.documentElement.classList.remove('mansion-open')
     root.remove()
@@ -165,6 +215,26 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
     editButton.setAttribute('aria-pressed', 'false')
   }
   button('Return to puzzle', X, exit)
+  const recovery = button('Play Robin', Play, () => { audio.playRobin?.(); finished = false; finale.hidden = true })
+  recovery.hidden = true
+  const finaleButton = (label: string, icon: IconNode, action: () => void) => {
+    const element = document.createElement('button'); element.type = 'button'; element.title = label
+    const image = createElement(icon); image.setAttribute('aria-hidden', 'true')
+    const text = document.createElement('span'); text.textContent = label
+    element.append(image, text); element.addEventListener('click', () => { restorePointer(); action() }); finale.append(element)
+  }
+  finaleButton('Restart song', RotateCcw, () => { finished = false; finale.hidden = true; audio.playRobin?.(); canvas.focus() })
+  finaleButton('Start from beginning', SkipBack, () => {
+    songAwarded = false; finished = false; finale.hidden = true; recovery.hidden = true
+    audio.stopRobin?.()
+    robin = createRobinSequence(); position = { x: 0, z: 1.3 }; robinFrame = robin.update(0, position)
+    camera.position.set(0, 1.65, 1.3); camera.rotation.set(0, 0, 0)
+    stride = 0; sinceStep = 0
+    chimes.destroy(); chimes = createNightChimes(); chimes.resume()
+    fairy?.destroy(); fairy = introduction ? createFairySequence(root, scene, camera, !motion, introduction.onComplete) : undefined
+    audio.setSpatial(spatialMusic(position, 0)); audio.resume(); notify(''); canvas.focus()
+  })
+  finaleButton('Command center', X, exit)
   function updateEditing() {
     editButton?.setAttribute('aria-pressed', String(editing))
     root.classList.toggle('mansion-world--editing', editing)
@@ -199,11 +269,11 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
       if (!source) { replace(surface.placeholder); continue }
       new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}${source}`, texture => {
         const image = texture.image as HTMLImageElement
-        const target = document.createElement('canvas'); target.width = 768; target.height = 960
+        const fit = fitFramePicture(image.width, image.height, surface.mesh.geometry.parameters.width, surface.mesh.geometry.parameters.height)
+        const target = document.createElement('canvas'); target.width = fit.canvasWidth; target.height = fit.canvasHeight
         const context = target.getContext('2d')!
-        context.fillStyle = '#e0e2db'; context.fillRect(0, 0, target.width, target.height)
-        const scale = Math.min((target.width - 50) / image.width, (target.height - 50) / image.height)
-        context.drawImage(image, (target.width - image.width * scale) / 2, (target.height - image.height * scale) / 2, image.width * scale, image.height * scale)
+        context.fillStyle = surface.mat; context.fillRect(0, 0, target.width, target.height)
+        context.drawImage(image, fit.x, fit.y, fit.width, fit.height)
         texture.dispose()
         const fitted = new THREE.CanvasTexture(target); fitted.colorSpace = THREE.SRGBColorSpace; fitted.anisotropy = 4
         replace(fitted)
@@ -240,6 +310,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
   canvas.addEventListener('pointerdown', event => {
     if (event.button !== 0 || fairy?.blocking) return
     audio.resume()
+    chimes.resume()
     canvas.focus()
     dragging = { x: event.clientX, y: event.clientY, moved: false }
     if (event.pointerType === 'mouse' && !editing && mouseLockSupported) { captureMouse(); return }
@@ -265,6 +336,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
   canvas.addEventListener('pointercancel', clearMovement)
   const keys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'])
   const keydown = (event: KeyboardEvent) => {
+    if (keys.has(event.code)) chimes.resume()
     if (keys.has(event.code)) { event.preventDefault(); if (!uploading && !fairy?.blocking) pressed.add(event.code) }
     if (event.code === 'Escape') { restorePointer(); if (editing) { editing = false; updateEditing() } }
     if (event.code === 'Tab') {
@@ -279,7 +351,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
   const touch = root.querySelector<HTMLElement>('.mansion-touch')!
   for (const [key, label, icon] of [['ArrowUp', 'Walk forward', ArrowUp], ['ArrowLeft', 'Walk left', ArrowLeft], ['ArrowDown', 'Walk backward', ArrowDown], ['ArrowRight', 'Walk right', ArrowRight]] as const) {
     const element = document.createElement('button'); element.type = 'button'; element.className = 'mansion-button'; element.dataset.direction = key; element.setAttribute('aria-label', label); element.title = label; element.append(createElement(icon)); touch.append(element)
-    element.addEventListener('pointerdown', event => { event.preventDefault(); if (uploading || fairy?.blocking) return; audio.resume(); pressed.add(key); element.setPointerCapture(event.pointerId) })
+    element.addEventListener('pointerdown', event => { event.preventDefault(); if (uploading || fairy?.blocking) return; audio.resume(); chimes.resume(); pressed.add(key); element.setPointerCapture(event.pointerId) })
     element.addEventListener('pointerup', () => pressed.delete(key)); element.addEventListener('pointercancel', () => pressed.delete(key)); element.addEventListener('lostpointercapture', () => pressed.delete(key))
   }
   const resize = () => {
@@ -290,8 +362,8 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
   const observer = new ResizeObserver(resize); observer.observe(root); cleanup.push(() => observer.disconnect())
   const onVisibility = () => {
     clearMovement(); previousTime = 0
-    if (document.hidden) { cancelAnimationFrame(animation); animation = 0 }
-    else if (!animation) animation = requestAnimationFrame(tick)
+    if (document.hidden) { chimes.suspend(); cancelAnimationFrame(animation); animation = 0 }
+    else if (!animation) { chimes.resume(); animation = requestAnimationFrame(tick) }
   }
   document.addEventListener('visibilitychange', onVisibility); cleanup.push(() => document.removeEventListener('visibilitychange', onVisibility))
   const contextLost = (event: Event) => { event.preventDefault(); notify('The graphics context was lost. Return to the puzzle and reopen the gallery.'); clearMovement(); cancelAnimationFrame(animation) }
@@ -299,7 +371,8 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
   function tick(timestamp: number) {
     if (disposed) return
     animation = requestAnimationFrame(tick)
-    const delta = Math.min(.05, previousTime ? (timestamp - previousTime) / 1000 : 0)
+    const elapsed = previousTime ? Math.max(0, (timestamp - previousTime) / 1000) : 0
+    const delta = Math.min(.05, elapsed)
     previousTime = timestamp
     fairy?.update(delta)
     if (fairy?.blocking) {
@@ -316,7 +389,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
     orientation.setFromQuaternion(camera.quaternion)
     const yaw = orientation.y
     const distance = delta * 3.3
-    const next = movePosition(position, (sideways * Math.cos(yaw) - forward * Math.sin(yaw)) * distance, (-forward * Math.cos(yaw) - sideways * Math.sin(yaw)) * distance)
+    const next = movePosition(position, (sideways * Math.cos(yaw) - forward * Math.sin(yaw)) * distance, (-forward * Math.cos(yaw) - sideways * Math.sin(yaw)) * distance, songAwarded)
     const travelled = Math.hypot(next.x - position.x, next.z - position.z)
     position = next
     if (travelled > .0001) {
@@ -330,12 +403,44 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, floorHeight(position.z) + 1.65 + bob, 1 - Math.exp(-delta * 18))
     if (!controls.isLocked) camera.rotation.z = motion && travelled > .0001 ? Math.cos(stride / 2) * .003 : 0
     root.querySelector('[data-room]')!.textContent = position.z < -45 ? 'The Ballroom' : position.z < -36 ? 'Grand Stair' : 'East Hall'
-    scenery.animate(timestamp / 1000, motion, audio.spectrum?.()?.bands ?? [])
+    robinFrame = robin.update(elapsed, position, !editing && !uploading && !document.hidden)
+    if (robinFrame.unlocked && !songAwarded) {
+      songAwarded = true
+      chimes.destroy()
+      audio.unlockRobin?.()
+      audio.setSpatial({ gain: .68, pan: 0 })
+      audio.playRobin?.()
+      notify('Robin unlocked.', Music2)
+    }
+    const playback = audio.robinPlayback?.()
+    const ended = playback?.status === 'ended'
+    const cycle = playback?.cycle ?? 0
+    const show = songAwarded ? ended ? .3 : THREE.MathUtils.smoothstep(cycle, 0, 2) : 0
+    const spectrum = audio.spectrum?.()
+    const beat = response.update(cycle, playback?.status === 'playing' && !audio.muted(), motion, playback?.cue?.beat)
+    karaoke.update(playback?.status === 'playing' ? playback.cue?.lyric ?? null : null)
+    scenery.animate(timestamp / 1000, motion, spectrum?.bands ?? [], show, spectrum?.waveform ?? [])
+    night.update(robinFrame, motion, show, scenery.levels, beat.pulses)
+    fountain.update(playback?.status === 'paused' ? 0 : delta, robinFrame.ballroomTime, robinFrame.awakened, songAwarded, cycle, ended, motion, scenery.levels, spectrum?.bands ?? [], beat.impact)
+    hemisphere.intensity = 1.1 * (1 - robinFrame.night * .75) + show * .12
+    sun.intensity *= 1 - robinFrame.night * .8
+    chimes.update(delta, THREE.MathUtils.smoothstep(robinFrame.night, .45, 1), audio.muted())
+    recovery.hidden = !songAwarded || !['error', 'gesture'].includes(playback?.status ?? '')
+    if (ended && !finished) { finished = true; restorePointer(); notify('') }
+    finaleAnchor.set(0, -1.7, -51.9).project(camera)
+    finale.hidden = !ended || position.z > -45.5 || finaleAnchor.z < -1 || finaleAnchor.z > 1 || Math.abs(finaleAnchor.x) > 1.4
+    if (!finale.hidden) {
+      const halfWidth = Math.min(190, root.clientWidth / 2 - 14)
+      finale.style.left = `${THREE.MathUtils.clamp((finaleAnchor.x + 1) * root.clientWidth / 2, halfWidth + 14, root.clientWidth - halfWidth - 14)}px`
+      finale.style.top = `${THREE.MathUtils.clamp((1 - finaleAnchor.y) * root.clientHeight / 2, 140, root.clientHeight - 235)}px`
+    }
     if (timestamp - audioTime > 80) {
-      audioTime = timestamp; const spatial = spatialMusic(position, yaw); audio.setSpatial(spatial)
+      audioTime = timestamp; const spatial = songAwarded ? { gain: .68, pan: 0 } : spatialMusic(position, yaw); if (!songAwarded) spatial.gain *= 1 - THREE.MathUtils.smoothstep(robinFrame.night, 0, .7); audio.setSpatial(spatial)
+      root.dataset.robinPlayback = playback?.status ?? 'idle'; root.dataset.robinCycle = cycle.toFixed(3)
+      root.dataset.robinPhase = robinFrame.phase; root.dataset.robinWait = robinFrame.ballroomTime.toFixed(2); root.dataset.robinCharge = robinFrame.charge.toFixed(3)
       root.dataset.x = position.x.toFixed(2); root.dataset.z = position.z.toFixed(2); root.dataset.yaw = yaw.toFixed(3); root.dataset.gain = spatial.gain.toFixed(3); root.dataset.pan = spatial.pan.toFixed(3)
     }
-    if (timestamp - renderTime >= 1000 / 45) { scenery.render(camera); renderTime = timestamp }
+    if (timestamp - renderTime >= 1000 / 45) { night.render(() => scenery.render(camera)); renderTime = timestamp }
   }
   document.body.append(root)
   app.inert = true
@@ -343,6 +448,7 @@ export function openMansion(audio: MansionAudio, onClose: () => void, introducti
   root.focus()
   audio.setSpatial(spatialMusic(position, 0))
   audio.resume()
+  chimes.resume()
   resize()
   if (introduction) fairy = createFairySequence(root, scene, camera, !motion, introduction.onComplete)
   if (fairy?.blocking) renderer.render(fairy.scene, fairy.camera)

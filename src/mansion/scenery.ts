@@ -2,12 +2,12 @@ import * as THREE from 'three'
 import seedrandom from 'seedrandom'
 import { mansionSeed, pictureFrames, ballroomPillarDepths, floorHeight } from './layout'
 import { createEnvironment } from './environment'
-import { createDoorView } from './door-views'
+import { addSharedPorch, createDoorView } from './door-views'
 import type { DoorView } from './door-views'
 import { createWindowGlass } from './window-glass'
 import { createPlayerShadow } from './player-shadow'
 
-export interface FrameSurface { mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>; id: string; placeholder: THREE.Texture }
+export interface FrameSurface { mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>; id: string; placeholder: THREE.Texture; mat: string }
 
 function canvasTexture(width: number, height: number, draw: (context: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
@@ -70,7 +70,9 @@ export function createScenery(scene: THREE.Scene, sunlight: THREE.DirectionalLig
   box(20, .18, 20, 0, -3.09, -55, roomFloorMaterial)
   box(.25, 4.7, 40, 3.1, 2.35, -16, materials.wall)
   box(6.4, .22, 40, 0, 4.8, -16, materials.trim)
-  box(6.4, 4.7, .22, 0, 2.35, 3.15, materials.wall)
+  for (const side of [-1, 1]) box(2.77, 4.7, .22, side * 1.815, 2.35, 3.15, materials.wall)
+  box(.86, 1.4625, .22, 0, .73125, 3.15, materials.wall)
+  box(.86, 2.1625, .22, 0, 3.61875, 3.15, materials.wall)
   const runnerMap = canvasTexture(256, 512, context => {
     context.fillStyle = '#562e42'; context.fillRect(0, 0, 256, 512)
     context.strokeStyle = '#bca174'; context.lineWidth = 7; context.strokeRect(12, -5, 232, 522)
@@ -124,13 +126,20 @@ export function createScenery(scene: THREE.Scene, sunlight: THREE.DirectionalLig
     const part = (width: number, height: number, depth: number, px: number, py: number, pz: number, material: THREE.Material) => {
       const mesh = new THREE.Mesh(boxGeometry, material); mesh.scale.set(width, height, depth); mesh.position.set(px, py, pz); group.add(mesh)
     }
-    part(1.3, 2.9, .09, 0, 1.45, 0, materials.door)
+    if (view === 'porch') {
+      for (const side of [-1, 1]) part(.22, 2.9, .09, side * .54, 1.45, 0, materials.door)
+      part(.86, 1.4625, .09, 0, .73125, 0, materials.door)
+      part(.86, .3625, .09, 0, 2.71875, 0, materials.door)
+    } else part(1.3, 2.9, .09, 0, 1.45, 0, materials.door)
     for (const px of [-.73, .73]) part(.13, 3.1, .15, px, 1.5, .08, materials.trim)
     part(1.6, .16, .16, 0, 3, .08, materials.trim)
     part(.94, .72, .025, 0, .65, .06, materials.panel)
     const window = new THREE.Mesh(new THREE.PlaneGeometry(.86, 1.075), new THREE.MeshBasicMaterial())
-    window.name = `closed-door-window-${view}`; window.position.set(0, 2, .083); group.add(window)
-    doorViews.push(createDoorView(view, window, playerShadow))
+    window.name = `closed-door-window-${view}`; window.position.set(0, 2, .083)
+    if (view !== 'porch') {
+      group.add(window)
+      doorViews.push(createDoorView(view, window, playerShadow))
+    } else window.material.dispose()
     const glass = new THREE.Mesh(window.geometry, materials.glass)
     glass.name = `door-window-glass-${view}`; glass.position.set(0, 2, .089); group.add(glass)
     for (const side of [-1, 1]) {
@@ -144,6 +153,7 @@ export function createScenery(scene: THREE.Scene, sunlight: THREE.DirectionalLig
   door(2.86, 0, -9, -Math.PI / 2, 'study')
   door(2.86, 0, -28, -Math.PI / 2, 'conservatory')
   door(0, 0, 2.98, Math.PI, 'porch')
+  addSharedPorch(scene)
   for (let index = 0; index < 18; index++) {
     const top = -(index + 1) * 3 / 18
     box(6, 3 + top + .08, .51, 0, (top - 3) / 2, -36 - (index + .5) * .5, materials.trim)
@@ -204,12 +214,19 @@ export function createScenery(scene: THREE.Scene, sunlight: THREE.DirectionalLig
     const fixture = new THREE.Mesh(new THREE.SphereGeometry(.18, 12, 8), materials.glow); fixture.position.set(0, 4.05, z); scene.add(fixture)
     const light = new THREE.PointLight('#fff0d0', 12, 9, 2); light.position.set(0, 3.9, z); scene.add(light)
   }
+  const frameFinishes = {
+    brass: materials.gold,
+    silver: new THREE.MeshStandardMaterial({ color: '#bfc9c7', metalness: .75, roughness: .36 }),
+    dark: new THREE.MeshStandardMaterial({ color: '#293335', metalness: .25, roughness: .5 }),
+  }
   for (const frame of pictureFrames) {
-    const group = new THREE.Group(); group.position.set(frame.x, frame.y, frame.z); group.rotation.y = frame.rotation; scene.add(group)
+    const group = new THREE.Group(); group.name = `picture-frame-${frame.id}`; group.position.set(frame.x, frame.y, frame.z); group.rotation.y = frame.rotation; scene.add(group)
+    const finish = frameFinishes[frame.finish ?? 'brass']
+    const edge = frame.finish === 'silver' ? .045 : frame.finish === 'dark' ? .055 : .07
     const surround = new THREE.Mesh(boxGeometry, materials.dark); surround.scale.set(frame.width + .22, frame.height + .22, .07); group.add(surround)
     for (const side of [-1, 1]) {
-      const vertical = new THREE.Mesh(boxGeometry, materials.gold); vertical.scale.set(.07, frame.height + .2, .11); vertical.position.set(side * (frame.width + .13) / 2, 0, .035); group.add(vertical)
-      const horizontal = new THREE.Mesh(boxGeometry, materials.gold); horizontal.scale.set(frame.width + .2, .07, .11); horizontal.position.set(0, side * (frame.height + .13) / 2, .035); group.add(horizontal)
+      const vertical = new THREE.Mesh(boxGeometry, finish); vertical.scale.set(edge, frame.height + .2, .11); vertical.position.set(side * (frame.width + .13) / 2, 0, .035); group.add(vertical)
+      const horizontal = new THREE.Mesh(boxGeometry, finish); horizontal.scale.set(frame.width + .2, edge, .11); horizontal.position.set(0, side * (frame.height + .13) / 2, .035); group.add(horizontal)
     }
     const placeholder = canvasTexture(320, 400, context => {
       context.fillStyle = '#d6d9d2'; context.fillRect(0, 0, 320, 400)
@@ -219,7 +236,7 @@ export function createScenery(scene: THREE.Scene, sunlight: THREE.DirectionalLig
     textures.push(placeholder)
     const material = new THREE.MeshStandardMaterial({ map: placeholder, roughness: .88 })
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(frame.width, frame.height), material); mesh.position.z = .095; mesh.userData.frameId = frame.id; group.add(mesh)
-    surfaces.push({ mesh, id: frame.id, placeholder })
+    surfaces.push({ mesh, id: frame.id, placeholder, mat: frame.mat === 'dark' ? '#15191b' : '#e7e8e2' })
   }
   const grass = new THREE.MeshStandardMaterial({ color: '#6f8850', roughness: 1 })
   box(140, .2, 190, -81, -.32, -36, grass)
@@ -290,6 +307,7 @@ export function createScenery(scene: THREE.Scene, sunlight: THREE.DirectionalLig
   const shadowLamp = new THREE.Vector3()
   return {
     surfaces,
+    levels: environment.levels,
     render(camera: THREE.PerspectiveCamera) {
       shadowFeet.set(camera.position.x, floorHeight(camera.position.z), camera.position.z)
       shadowSun.copy(sunlight.position).sub(sunlight.target.position).normalize()
@@ -305,8 +323,8 @@ export function createScenery(scene: THREE.Scene, sunlight: THREE.DirectionalLig
       doorViews.forEach(view => view.update(renderer, camera))
       renderer.render(scene, camera)
     },
-    animate(time: number, motion: boolean, bands: readonly number[] = []) {
-      environment.animate(time, motion, bands)
+    animate(time: number, motion: boolean, bands: readonly number[] = [], performance = 0, waveform: readonly number[] = []) {
+      environment.animate(time, motion, bands, performance, waveform)
       windowLight.forEach((material, index) => { material.opacity = .05 + environment.levels[index % 3]! * .35; material.color.copy(sunlight.color) })
       ballroomLight.intensity = 35 + environment.levels[1]! * 140
       ballroomLight.color.setHSL(.08 + environment.levels[2]! * .3, .6, .7)

@@ -1,3 +1,33 @@
+.mansion-karaoke {
+	position: absolute;
+	left: 50%;
+	bottom: 24px;
+	transform: translateX(-50%);
+	width: min(780px, calc(100% - 220px));
+	min-height: 96px;
+	display: flex;
+	flex-wrap: wrap;
+	align-content: center;
+	justify-content: center;
+	gap: 8px 14px;
+	pointer-events: none;
+}
+.mansion-karaoke[hidden] { display: none; }
+.mansion-karaoke-word { position: relative; display: inline-block; max-width: 100%; }
+.mansion-karaoke .glyph-line { display: flex; max-width: 100%; gap: 0; }
+.mansion-karaoke .glyph { width: 30px; height: 30px; flex: 0 1 30px; min-width: 0; }
+.mansion-karaoke-base { display: block; opacity: .5; filter: brightness(0) invert(1) drop-shadow(0 2px 3px #000); }
+.mansion-karaoke-fill {
+	position: absolute;
+	inset: 0;
+	clip-path: inset(0 var(--lyric-fill, 100%) 0 0);
+	filter: brightness(0) saturate(100%) invert(87%) sepia(33%) saturate(805%) hue-rotate(341deg) brightness(106%) contrast(96%) drop-shadow(0 0 5px #ffe5a0);
+}
+.mansion-karaoke-word.is-current .mansion-karaoke-base { opacity: .8; }
+@media (max-width: 600px) {
+	.mansion-karaoke { bottom: 132px; width: calc(100% - 28px); min-height: 108px; gap: 7px 10px; }
+	.mansion-karaoke .glyph { width: 23px; height: 23px; flex-basis: 23px; }
+}
 .mansion-open { overflow: hidden; }
 .mansion-open #app { visibility: hidden; }
 .mansion-world { position: fixed; inset: 0; z-index: 20000; background: #0c1011; color: #f0f1e9; font-family: 'Rajdhani', sans-serif; touch-action: none; }
@@ -25,5 +55,11 @@
 .mansion-touch [data-direction=ArrowRight] { grid-column: 3; grid-row: 2; }
 .mansion-transition { position: absolute; inset: 0; pointer-events: none; background: #e9f4ed; opacity: 0; transition: opacity 1.8s ease-out; }
 .mansion-world--entering .mansion-transition { opacity: 1; }
+.mansion-finale { position: absolute; width: min(380px, calc(100% - 28px)); transform: translateX(-50%); display: grid; gap: 8px; padding: 12px; border-top: 1px solid #e8d1a0; background: #120d20e8; backdrop-filter: blur(8px); }
+.mansion-finale[hidden], .mansion-button[hidden] { display: none; }
+.mansion-finale button { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 42px; width: 100%; padding: 8px 12px; border: 1px solid #dfcda650; border-radius: 3px; background: #292031; color: #fff0cd; font: 500 17px 'Rajdhani', sans-serif; letter-spacing: 0; cursor: pointer; touch-action: manipulation; }
+.mansion-finale button:hover { background: #433246; border-color: #eed8ac; }
+.mansion-finale button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.mansion-finale svg { flex: 0 0 18px; width: 18px; height: 18px; }
 @media (max-width: 700px) { .mansion-hud { padding: 14px; } .mansion-location strong { font-size: 20px; } .mansion-actions { max-width: 235px; gap: 5px; } .mansion-button { width: 38px; height: 38px; } .mansion-touch { right: 14px; bottom: 18px; grid-template-columns: repeat(3, 44px); } .mansion-touch .mansion-button { width: 44px; height: 44px; } .mansion-status { left: 14px; bottom: 124px; transform: none; max-width: calc(100% - 28px); } }
 @media (prefers-reduced-motion: reduce) { .mansion-transition { transition: none; } }

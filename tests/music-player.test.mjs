@@ -9,13 +9,16 @@ const compiled = ts.transpileModule(readFileSync(new URL('../src/music-player.ts
 }).outputText + '\nexports.testRuntime = playerRuntime'
 const flush = () => new Promise(resolve => setImmediate(resolve))
 
-function setup(fail = false, initialVolume = .25, autoplay = false) {
+function setup(fail = false, initialVolume = .25, autoplay = false, code = 'note("c4 e4 ~ g4").s("sine")', cycleLimit = 0) {
   const events = new Map()
   const messages = []
+  const voiceInstalls = []
   const attributes = new Map()
   const parent = { postMessage: message => messages.push(message) }
   const label = { textContent: '' }
   let stops = 0
+  let pauses = 0
+  let starts = 0
   let gain = 1
   const gainChanges = []
   const resumeGains = []
@@ -27,17 +30,18 @@ function setup(fail = false, initialVolume = .25, autoplay = false) {
   let nextFrame = 0
   const frames = new Map()
   const queries = []
+  const evaluations = []
   const button = { disabled: true, innerHTML: '', setAttribute: (key, value) => attributes.set(key, value), addEventListener: (name, handler) => events.set(`button-${name}`, handler) }
   const window = {
     addEventListener: (name, handler) => events.set(name, handler),
     initStrudel: async next => {
       options = next
       return {
-        stop: () => { stops++ }, scheduler: { now: () => cycle, cps: .5 },
+        stop: () => { stops++ }, pause: () => { pauses++ }, start: async () => { starts++ }, scheduler: { now: () => cycle, cps: .5 },
         state: { pattern: { queryArc: (...args) => { queries.push(args); if (queryError) throw Error('Visual query failed'); return haps } } },
       }
     },
-    evaluate: async () => { window.hush = () => { throw Error('Mutable global must not control transport') }; if (fail) options.onEvalError(new Error('Bad score')) },
+    evaluate: async code => { evaluations.push(code); window.hush = () => { throw Error('Mutable global must not control transport') }; if (fail) options.onEvalError(new Error('Bad score')) },
     getSuperdoughAudioController: () => ({ output: { destinationGain: { gain: {
       cancelScheduledValues: () => gainChanges.push({ type: 'cancel' }),
       setValueAtTime: value => { gain = value; gainChanges.push({ type: 'immediate', value }) },
@@ -45,7 +49,7 @@ function setup(fail = false, initialVolume = .25, autoplay = false) {
     } } } }),
   }
   const context = { exports: {}, window, parent, document: { querySelector: selector => selector === 'button' ? button : label },
-    require: () => ({ default: 'strudel.js', createElement: () => ({ outerHTML: '<svg></svg>' }) }),
+    require: () => ({ default: 'strudel.js', installRobinVoice() {}, createElement: () => ({ outerHTML: '<svg></svg>' }) }),
     setTimeout: callback => { callback(); return 0 },
     requestAnimationFrame: callback => { frames.set(++nextFrame, callback); return nextFrame },
     cancelAnimationFrame: id => frames.delete(id),
@@ -59,14 +63,68 @@ function setup(fail = false, initialVolume = .25, autoplay = false) {
     },
   }
   runInNewContext(compiled, context)
-  context.exports.testRuntime('note("c4 e4 ~ g4").s("sine")', initialVolume, autoplay, '<svg>play</svg>', '<svg>pause</svg>')
+  context.exports.testRuntime(code, initialVolume, autoplay, '<svg>play</svg>', '<svg>pause</svg>', async (audio, engine, dictionary) => voiceInstalls.push({ audio, dictionary }), cycleLimit)
   return {
-    events, messages, parent, attributes, frames, queries, gainChanges, resumeGains,
-    get audio() { return audio }, get stops() { return stops }, get gain() { return gain },
+    events, messages, parent, attributes, frames, queries, gainChanges, resumeGains, voiceInstalls, evaluations,
+    get audio() { return audio }, get stops() { return stops }, get pauses() { return pauses }, get starts() { return starts }, get gain() { return gain },
     setHaps: next => { haps = next }, failQuery: () => { queryError = true },
     draw: time => { cycle = time; events.get('message')({ source: parent, data: { type: 'signal-music-control', action: 'draw' } }) },
+    transport: time => { cycle = time; events.get('message')({ source: parent, data: { type: 'signal-music-control', action: 'transport' } }) },
   }
 }
+
+test('one-shot transport finishes from the song clock even muted and never schedules another loop', async () => {
+  const player = setup(false, 0, true, 'note("c4")', 56)
+  await flush()
+  assert.match(player.evaluations[0], /filterWhen\(time => time < 56\)/)
+  player.transport(28)
+  assert.equal(player.messages.at(-1).cycle, 28)
+  player.transport(56)
+  assert.equal(player.stops, 0, 'Allow the final reverb tail')
+  player.transport(56.4)
+  assert.equal(player.messages.at(-1).status, 'ended')
+  assert.equal(player.audio.state, 'suspended')
+  assert.equal(player.stops, 1)
+})
+
+test('pausing a one-shot freezes audio without reevaluating or resetting the song', async () => {
+  const player = setup(false, .25, true, 'note("c4")', 56)
+  await flush()
+  player.events.get('button-click')()
+  assert.equal(player.stops, 0)
+  assert.equal(player.pauses, 1)
+  assert.equal(player.audio.state, 'suspended')
+  player.events.get('button-click')()
+  await flush()
+  assert.equal(player.evaluations.length, 1)
+  assert.equal(player.starts, 1)
+  assert.equal(player.audio.state, 'running')
+  player.transport(32)
+  assert.equal(player.messages.at(-1).cycle, 32)
+})
+
+test('performance cues follow the loudest sung word and latest drum without repeating harmony', async () => {
+  const player = setup(false, .25, true, 'note("c4")', 56)
+  await flush()
+  const voice = { s: 'robin-formant', lyricLine: 'robin you', lyricWord: 0, lyricPart: 1, lyricParts: 2 }
+  player.setHaps([
+    { whole: { begin: 12, end: 12.5 }, value: { ...voice, gain: .54 } },
+    { whole: { begin: 12, end: 12.5 }, value: { ...voice, gain: .08, lyricWord: 1 } },
+    { whole: { begin: 12.15, end: 12.4 }, value: { robinBeat: 'bass' } },
+    { whole: { begin: 12.15, end: 12.4 }, value: { robinBeat: 'kick' } },
+  ])
+  player.transport(12.3)
+  assert.equal(player.messages.at(-1).cue.lyric.word, 0)
+  assert.ok(Math.abs(player.messages.at(-1).cue.lyric.progress - .75) < 1e-8)
+  assert.equal(player.messages.at(-1).cue.beat.strength, 1)
+  player.transport(13)
+  assert.equal(player.messages.at(-1).cue.lyric, null)
+  assert.equal(player.messages.at(-1).cue.beat, null)
+  player.events.get('message')({ source: player.parent, data: { type: 'signal-music-control', action: 'volume', volume: 0 } })
+  player.transport(12.3)
+  assert.equal(player.messages.at(-1).cue.lyric, null)
+  assert.equal(player.messages.at(-1).cue.beat, null)
+})
 
 test('manual play and pause use the retained REPL and report persistence intent', async () => {
   const player = setup()
@@ -85,6 +143,18 @@ test('manual play and pause use the retained REPL and report persistence intent'
   assert.equal(player.messages.at(-1).manual, true)
   player.events.get('pagehide')()
   assert.equal(player.audio.state, 'closed')
+})
+
+test('a replaced player cannot autoplay after its asynchronous initialization completes', async () => {
+  const player = setup(false, .25, true)
+  player.events.get('pagehide')()
+  await flush()
+  assert.equal(player.audio.state, 'closed')
+  assert.equal(player.evaluations.length, 0)
+  assert.equal(player.resumeGains.length, 0)
+  player.events.get('message')({ source: player.parent, data: { type: 'signal-music-control', action: 'play' } })
+  await flush()
+  assert.equal(player.evaluations.length, 0)
 })
 
 test('a muted player sets gain to zero before audio resumes instead of fading down from full volume', async () => {
@@ -190,7 +260,7 @@ test('the host drives offscreen-frame highlights at 30fps, filters ranges, and c
   const context = {
     exports: {}, document: { createElement: () => frame }, location: { href: 'https://example.test/' }, URL,
     window: { addEventListener: (name, handler) => events.set(name, handler), removeEventListener: name => events.delete(name) },
-    require: () => ({ default: 'strudel.js', createElement: () => ({ outerHTML: '<svg></svg>' }) }),
+    require: () => ({ default: 'strudel.js', installRobinVoice() {}, createElement: () => ({ outerHTML: '<svg></svg>' }) }),
     requestAnimationFrame: callback => { frames.set(++nextFrame, callback); return nextFrame },
     cancelAnimationFrame: id => frames.delete(id),
   }
@@ -248,4 +318,29 @@ test('spatial volume is source checked, bounded and restored independently of us
   assert.ok(Math.abs(player.gain - .06) < 1e-8)
   send(player.parent, 1, 0)
   assert.equal(player.gain, .3)
+})
+
+test('vocal scores wait for parent-sourced pronunciations and install once before autoplay', async () => {
+  const player = setup(false, 0, true, "robinVoice(['Robin'], [[74]])")
+  await flush()
+  assert.equal(player.messages.at(-1).type, 'signal-music-lexicon-request')
+  const data = { type: 'signal-music-lexicon', dictionary: { robin: 'R AA1 B IH0 N' } }
+  player.events.get('message')({ source: {}, data })
+  await flush(); assert.equal(player.voiceInstalls.length, 0)
+  player.events.get('message')({ source: player.parent, data })
+  await flush(); assert.equal(player.voiceInstalls.length, 1)
+  assert.equal(player.voiceInstalls[0].dictionary.robin, data.dictionary.robin)
+  assert.equal(player.messages.at(-1).status, 'playing')
+  assert.equal(player.gain, 0)
+  player.events.get('message')({ source: player.parent, data })
+  await flush(); assert.equal(player.voiceInstalls.length, 1)
+})
+
+test('a missing lyric dictionary produces an actionable error instead of silent vocals', async () => {
+  const player = setup(false, .25, false, "robinVoice(['Robin'], [[74]])")
+  await flush()
+  player.events.get('message')({ source: player.parent, data: { type: 'signal-music-lexicon', error: true } })
+  await flush()
+  assert.equal(player.messages.at(-1).status, 'error')
+  assert.match(player.messages.at(-1).detail, /pronunciations could not load/)
 })

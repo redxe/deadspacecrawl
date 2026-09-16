@@ -9,3 +9,12 @@ export function musicResponse(bands: readonly number[]) {
   }
   return [energy(0, 12), energy(12, 32), energy(32, 48)]
 }
+
+export function waveformResponse(waveform: readonly number[]) {
+  const values = Array.from({ length: 64 }, (_value, index) => {
+    const value = waveform[index] ?? 0
+    return Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0
+  })
+  const peak = Math.max(.025, ...values.map(Math.abs))
+  return values.map(value => value / peak)
+}

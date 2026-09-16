@@ -1,4 +1,22 @@
 {
   "version": 1,
-  "images": {}
+  "images": {
+    "gallery-1": "mansion-images/gallery-1-76ba0907a2417e56.webp",
+    "gallery-2": "mansion-images/gallery-2-58fe09608540b8a4.webp",
+    "gallery-3": "mansion-images/gallery-3-ff1943e9f4188f63.webp",
+    "gallery-4": "mansion-images/gallery-4-daee7bd7568ba132.webp",
+    "gallery-5": "mansion-images/gallery-5-354126768b08200c.webp",
+    "gallery-6": "mansion-images/gallery-6-5a89afce4749f68f.webp",
+    "gallery-7": "mansion-images/gallery-7-a4ea97c9f3a0edcc.webp",
+    "ballroom-north-1": "mansion-images/ballroom-north-1-59e16ddd736b7046.webp",
+    "ballroom-north-2": "mansion-images/ballroom-north-2-ffc299a28adfefb5.webp",
+    "ballroom-north-3": "mansion-images/ballroom-north-3-3e298afc41d23a27.webp",
+    "ballroom-north-4": "mansion-images/ballroom-north-4-26d08fcfd211f669.webp",
+    "ballroom-east-1": "mansion-images/ballroom-east-1-790e6c79e27397dc.webp",
+    "ballroom-east-2": "mansion-images/ballroom-east-2-a8dac5cbab55ed1a.webp",
+    "ballroom-east-3": "mansion-images/ballroom-east-3-5c5622db39fcdf12.webp",
+    "ballroom-west-1": "mansion-images/ballroom-west-1-1b9eaa1032512a14.webp",
+    "ballroom-west-2": "mansion-images/ballroom-west-2-3c27df48435d70f2.webp",
+    "ballroom-west-3": "mansion-images/ballroom-west-3-5ac9380cb244bf27.webp"
+  }
 }

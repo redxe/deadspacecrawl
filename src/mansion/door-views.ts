@@ -166,6 +166,22 @@ export function createDoorDiorama(kind: DoorView) {
   return { scene, camera }
 }
 
+export function addSharedPorch(scene: THREE.Scene) {
+  const porch = createDoorDiorama('porch').scene
+  const group = new THREE.Group()
+  group.name = 'shared-entrance-porch'
+  group.rotation.y = Math.PI
+  group.position.z = 5.397
+  const lawn = porch.getObjectByName('porch-ground')!
+  lawn.position.z = -57.5
+  for (const object of [...porch.children]) {
+    if (object instanceof THREE.Light) continue
+    group.add(object)
+  }
+  scene.add(group)
+  return group
+}
+
 export function createDoorView(kind: DoorView, surface: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>, worldShadow?: PlayerShadow) {
   const { scene, camera } = createDoorDiorama(kind)
   const shadow = createPlayerShadow()

@@ -21,6 +21,24 @@ runInNewContext(ts.transpileModule(readFileSync(new URL('../src/mansion/door-vie
 }).outputText, context)
 const { createDoorView } = context.exports
 
+test('shared porch uses the main world sky and lights without an independent scene or render target', () => {
+  const scene = new THREE.Scene()
+  const background = new THREE.Color('#03020b'); scene.background = background
+  const porch = context.exports.addSharedPorch(scene)
+  assert.equal(porch.parent, scene)
+  let lights = 0
+  porch.traverse(object => { if (object.isLight) lights++ })
+  assert.equal(lights, 0)
+  assert.equal(scene.background, background)
+  scene.updateMatrixWorld(true)
+  const lawn = new THREE.Box3().setFromObject(porch.getObjectByName('porch-ground'))
+  assert.ok(lawn.min.z > 2.89, 'Porch lawn cannot extend under the hallway or ballroom')
+  assert.ok(lawn.max.z > 100)
+  const materials = new Set(); const geometries = new Set()
+  porch.traverse(object => { if (object.isMesh) { materials.add(object.material); geometries.add(object.geometry) } })
+  materials.forEach(material => material.dispose()); geometries.forEach(geometry => geometry.dispose())
+})
+
 const fixture = (kind = 'study', rotation = 0, lighting) => {
   const surface = new THREE.Mesh(new THREE.PlaneGeometry(.86, 1.075), new THREE.MeshBasicMaterial())
   const group = new THREE.Group(); group.position.set(2, -3, -4); group.rotation.y = rotation; group.add(surface)

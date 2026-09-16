@@ -18,8 +18,10 @@ class Element {
   dataset = {}
   classList = { add() {}, toggle() {} }
   value = ''
+  style = {}
   open = false
   append(...children) { this.children.push(...children) }
+  prepend(...children) { this.children.unshift(...children) }
   replaceChildren(...children) { this.children = children }
   querySelector(selector) {
     if (!this.selectors.has(selector)) this.selectors.set(selector, new Element())
@@ -51,11 +53,11 @@ function setup(volume = .42, unlocked = true) {
   const icons = { createElement: () => new Element() }
   const modules = {
     lucide: icons,
-    './music-library': { builtInSongs: songs, loadMusicState: () => state, saveMusicState: next => { saved.push(JSON.parse(JSON.stringify(next))); return true } },
+    './music-library': { builtInSongs: songs, availableSongs: () => songs, robinSong: { id: 'robin', name: 'Robin', detail: 'Template', code: 'note("c4")' }, unlockRobinSong: () => { if (!songs.some(song => song.id === 'robin')) songs.push({ id: 'robin', name: 'Robin', detail: '', code: 'note("c4")' }); return true }, loadMusicState: () => state, saveMusicState: next => { saved.push(JSON.parse(JSON.stringify(next))); return true } },
     './music-editor': { initializeMusicEditor: () => ({ refresh() {}, setPlayback() {}, destroy() {} }) },
     './music-visualizer': { initializeMusicVisualizer: () => ({ update() {}, destroy() {} }) },
-    './music-player': { createMusicPlayer: (code, initialVolume, autoplay, onState, onRanges, onSpectrum) => {
-      const player = { frame: new Element(), code, initialVolume, autoplay, volumes: [], spatial: [], plays: 0, pauses: 0, onState, onSpectrum, play() { this.plays++ }, pause() { this.pauses++ }, setSpatial(gain, pan) { this.spatial.push({ gain, pan }) }, setVolume(next) { this.volumes.push(next) }, setHighlighting() {}, setVisualizing(enabled) { this.visualizing = enabled }, destroy() { this.destroyed = true } }
+    './music-player': { createMusicPlayer: (code, initialVolume, autoplay, onState, onRanges, onSpectrum, playback) => {
+      const player = { frame: new Element(), code, initialVolume, autoplay, playback, volumes: [], spatial: [], plays: 0, pauses: 0, onState, onSpectrum, play() { this.plays++ }, pause() { this.pauses++ }, setSpatial(gain, pan) { this.spatial.push({ gain, pan }) }, setVolume(next) { this.volumes.push(next) }, setHighlighting() {}, setVisualizing(enabled) { this.visualizing = enabled }, destroy() { this.destroyed = true } }
       players.push(player)
       return player
     } },
@@ -191,4 +193,70 @@ test('the gallery receives live Strudel spectrum while mute and pause clear its 
   player.onSpectrum(spectrum)
   player.onState({ status: 'paused' })
   assert.equal(view.music.getSpectrum(), null)
+})
+
+test('Robin unlock refreshes the library without changing playback, selection or volume', () => {
+  const view = setup()
+  view.music.unlockRobin(true)
+  view.music.unlockRobin(true)
+  assert.equal(view.dialog.querySelector('[data-song-list]').children.length, 3)
+  assert.equal(view.state.selected, 'first')
+  assert.equal(view.state.volume, .42)
+  assert.equal(view.players.length, 1)
+  assert.equal(view.saved.length, 0)
+  assert.equal(view.dialog.querySelector('[data-music-status]').children[0].attributes.get('aria-hidden'), 'true')
+  view.music.unlockRobin()
+  assert.equal(view.dialog.querySelector('[data-song-list]').children.length, 3)
+})
+
+test('Robin performance autoplays once, keeps mute and restores the normal track preference', () => {
+  const view = setup(0)
+  view.music.unlockRobin(true)
+  view.music.playRobin()
+  const first = view.players.at(-1)
+  assert.equal(first.autoplay, true)
+  assert.equal(first.initialVolume, 0)
+  assert.equal(first.playback.cycles, 56)
+  assert.equal(view.state.selected, 'robin')
+  first.onState({ status: 'playing' })
+  first.playback.onProgress(28)
+  assert.equal(view.music.getRobinPlayback().cycle, 28)
+  view.music.toggleMute()
+  assert.equal(view.saved.at(-1).selected, 'first', 'Temporary selection does not overwrite the normal preference')
+  first.onState({ status: 'ended' })
+  view.music.resume()
+  assert.equal(first.plays, 0, 'Movement cannot restart a finished performance')
+  view.music.playRobin()
+  assert.equal(view.music.getRobinPlayback().cycle, 0)
+  assert.equal(first.destroyed, true)
+  view.music.stopRobin()
+  assert.equal(view.state.selected, 'first')
+  assert.equal(view.music.getRobinPlayback(), null)
+})
+
+test('Robin owns a single player and rejects every callback from the previous song or replay', () => {
+  const view = setup()
+  const original = view.players[0]
+  view.music.unlockRobin(true)
+  view.music.playRobin()
+  const first = view.players.at(-1)
+  assert.equal(original.volumes.at(-1), 0)
+  assert.equal(original.pauses, 1)
+  assert.equal(original.destroyed, true)
+  original.onState({ status: 'playing' })
+  original.onSpectrum({ bands: Array(48).fill(1), waveform: Array(64).fill(1) })
+  assert.equal(view.music.getRobinPlayback().status, 'loading')
+  assert.equal(view.music.getSpectrum(), null)
+  first.onState({ status: 'playing' })
+  const cue = { lyric: { text: 'robin you', word: 0, progress: .3 }, beat: { cycle: 12, strength: 1 } }
+  first.playback.onCue(cue)
+  assert.equal(view.music.getRobinPlayback().cue, cue)
+  view.music.playRobin()
+  first.onState({ status: 'ended' })
+  first.playback.onProgress(56)
+  first.playback.onCue(cue)
+  assert.equal(view.music.getRobinPlayback().status, 'loading')
+  assert.equal(view.music.getRobinPlayback().cycle, 0)
+  assert.equal(view.music.getRobinPlayback().cue, null)
+  assert.equal(view.players.filter(player => !player.destroyed).length, 1)
 })

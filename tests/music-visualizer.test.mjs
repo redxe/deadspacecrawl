@@ -85,7 +85,7 @@ test('visualizer uses the parent clock with the editor closed and rejects invali
   const context = {
     exports: {}, document: { createElement: () => frame }, location: { href: 'https://example.test/' }, URL,
     window: { addEventListener: (name, callback) => events.set(name, callback), removeEventListener: name => events.delete(name) },
-    require: () => ({ default: 'strudel.js', createElement: () => ({ outerHTML: '<svg></svg>' }) }),
+    require: () => ({ default: 'strudel.js', installRobinVoice() {}, createElement: () => ({ outerHTML: '<svg></svg>' }) }),
     requestAnimationFrame: callback => { frames.set(++nextFrame, callback); return nextFrame },
     cancelAnimationFrame: id => frames.delete(id),
   }
@@ -120,5 +120,60 @@ test('visualizer uses the parent clock with the editor closed and rejects invali
   send()
   assert.equal(received.at(-1), null, 'Late packets cannot repaint a muted visualizer')
   player.destroy()
+  assert.equal(events.has('message'), false)
+})
+
+test('one-shot transport runs without visuals and rejects stale or untrusted progress', () => {
+  const events = new Map()
+  const frames = new Map()
+  const sent = []
+  const progress = []
+  const cues = []
+  let nextFrame = 0
+  const frame = { contentWindow: { postMessage: message => sent.push(message) }, setAttribute() {}, remove() {} }
+  const context = {
+    exports: {}, document: { createElement: () => frame }, location: { href: 'https://example.test/' }, URL,
+    window: { addEventListener: (name, callback) => events.set(name, callback), removeEventListener: name => events.delete(name) },
+    require: () => ({ default: 'strudel.js', installRobinVoice() {}, createElement: () => ({ outerHTML: '<svg></svg>' }) }),
+    requestAnimationFrame: callback => { frames.set(++nextFrame, callback); return nextFrame },
+    cancelAnimationFrame: id => frames.delete(id),
+  }
+  runInNewContext(compiled, context)
+  const player = context.exports.createMusicPlayer('note("c4")', 0, true, () => {}, undefined, undefined, { cycles: 56, onProgress: cycle => progress.push(cycle), onCue: cue => cues.push(cue) })
+  const receive = events.get('message')
+  const send = (data, source = frame.contentWindow) => receive({ source, data })
+  send({ type: 'signal-music-state', status: 'playing' })
+  const draw = [...frames.values()][0]
+  frames.clear(); draw(0)
+  assert.deepEqual(sent.map(message => message.action), ['transport'])
+  for (const cycle of [-1, 57, NaN, Infinity, '12']) send({ type: 'signal-music-progress', cycle })
+  send({ type: 'signal-music-progress', cycle: 12 }, {})
+  assert.deepEqual(progress, [])
+  for (const cycle of [0, 28, 56]) send({ type: 'signal-music-progress', cycle })
+  assert.deepEqual(progress, [0, 28, 56])
+  const cue = { lyric: { text: 'robin you', word: 0, progress: .5 }, beat: { cycle: 12, strength: 1 } }
+  send({ type: 'signal-music-progress', cycle: 12, cue }, {})
+  assert.equal(cues.at(-1).lyric, null)
+  send({ type: 'signal-music-progress', cycle: 12, cue })
+  assert.equal(cues.at(-1).lyric.text, 'robin you')
+  for (const lyric of [{ ...cue.lyric, word: 2 }, { ...cue.lyric, progress: NaN }, { ...cue.lyric, text: 'x'.repeat(241) }]) {
+    send({ type: 'signal-music-progress', cycle: 12, cue: { lyric, beat: { cycle: 13, strength: 1 } } })
+    assert.equal(cues.at(-1).lyric, null)
+    assert.equal(cues.at(-1).beat, null)
+  }
+  progress.length = 3
+  send({ type: 'signal-music-state', status: 'ended' })
+  assert.equal(cues.at(-1), null)
+  assert.equal(frames.size, 0)
+  send({ type: 'signal-music-progress', cycle: 30 })
+  assert.equal(progress.length, 3)
+  send({ type: 'signal-music-state', status: 'playing' })
+  const lateDraw = [...frames.values()][0]
+  player.destroy()
+  lateDraw(100)
+  send({ type: 'signal-music-state', status: 'playing' })
+  send({ type: 'signal-music-progress', cycle: 31 })
+  assert.equal(frames.size, 0)
+  assert.equal(progress.length, 3)
   assert.equal(events.has('message'), false)
 })

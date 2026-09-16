@@ -299,6 +299,10 @@ function renderBlock(block: PuzzleBlock): HTMLElement {
           muted: () => musicController.muted,
           toggleMute: () => musicController.toggleMute(),
           spectrum: () => musicController.getSpectrum(),
+          unlockRobin: () => musicController.unlockRobin(!!previewPuzzle),
+          playRobin: () => musicController.playRobin(),
+          stopRobin: () => musicController.stopRobin(),
+          robinPlayback: () => musicController.getRobinPlayback(),
         },
       })
       customWorkspaces.push({ destroy: () => { mounted = false; workspace.destroy() } })

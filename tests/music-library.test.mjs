@@ -49,3 +49,27 @@ test('malformed and blocked storage fail gracefully', () => {
   assert.ok(validateSong('', 'note(1)'))
   assert.ok(validateSong('Name', 'x'.repeat(20001)))
 })
+
+test('Robin stays hidden until unlocked, persists independently and remains available with blocked storage', () => {
+  const storage = new Map()
+  const load = (blocked = false) => {
+    const isolated = { exports: {}, localStorage: {
+      getItem: key => { if (blocked) throw Error('Blocked'); return storage.get(key) ?? null },
+      setItem: (key, value) => { if (blocked) throw Error('Blocked'); storage.set(key, value) },
+    } }
+    runInNewContext(ts.transpileModule(readFileSync(new URL('../src/music-library.ts', import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText, isolated)
+    return isolated.exports
+  }
+  const library = load()
+  assert.equal(library.availableSongs().some(song => song.id === 'robin'), false)
+  assert.equal(library.unlockRobinSong(), true)
+  assert.equal(load().availableSongs().filter(song => song.id === 'robin').length, 1)
+  const state = library.loadMusicState(); state.selected = 'robin'; library.saveMusicState(state)
+  assert.equal(load().loadMusicState().selected, 'robin')
+  const temporary = load(true)
+  assert.equal(temporary.unlockRobinSong(), false)
+  assert.equal(temporary.availableSongs().filter(song => song.id === 'robin').length, 1)
+  assert.equal(validateSong(library.robinSong.name, library.robinSong.code), undefined)
+})
